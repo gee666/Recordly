@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WEBCAM_OVERLAY } from "../../components/video-editor/types";
 
 const {
@@ -8,6 +8,7 @@ const {
 	initializeForwardFrameSourceMock,
 	pixiApplicationInstancesMock,
 	pixiInitializationErrorsMock,
+	pixiRendererTypesMock,
 	resolveMediaElementSourceMock,
 } = vi.hoisted(() => ({
 	cancelForwardFrameSourceMock: vi.fn(),
@@ -17,10 +18,11 @@ const {
 	pixiApplicationInstancesMock: [] as Array<{
 		destroy: ReturnType<typeof vi.fn>;
 		init: ReturnType<typeof vi.fn>;
-		renderer: { destroy: ReturnType<typeof vi.fn> };
+		renderer: { type: number; destroy: ReturnType<typeof vi.fn> };
 		stage: { destroy: ReturnType<typeof vi.fn> };
 	}>,
 	pixiInitializationErrorsMock: [] as Array<Error | undefined>,
+	pixiRendererTypesMock: [] as number[],
 	resolveMediaElementSourceMock: vi.fn(async () => ({
 		src: "blob:background",
 		revoke: vi.fn(),
@@ -32,17 +34,20 @@ vi.mock("pixi.js", () => ({
 		destroy = vi.fn(() => {
 			throw new TypeError("this._cancelResize is not a function");
 		});
-		init = vi.fn(async () => {
+		init = vi.fn(async (options: { preference: string }) => {
 			const error = pixiInitializationErrorsMock.shift();
 			if (error) throw error;
+			this.renderer.type =
+				pixiRendererTypesMock.shift() ?? (options.preference === "webgpu" ? 2 : 1);
 		});
-		renderer = { destroy: vi.fn() };
+		renderer = { type: 1, destroy: vi.fn() };
 		stage = { destroy: vi.fn() };
 
 		constructor() {
 			pixiApplicationInstancesMock.push(this);
 		}
 	},
+	RendererType: { WEBGL: 1, WEBGPU: 2 },
 	BlurFilter: class {},
 	Container: class {
 		visible = true;
@@ -158,7 +163,7 @@ function createMockCanvas() {
 	};
 }
 
-function createRenderer() {
+function createRenderer(overrides: Partial<ConstructorParameters<typeof FrameRenderer>[0]> = {}) {
 	return new FrameRenderer({
 		width: 1920,
 		height: 1080,
@@ -199,6 +204,7 @@ function createRenderer() {
 				blurIntensity: 20,
 			},
 		],
+		...overrides,
 	});
 }
 
@@ -231,6 +237,116 @@ it("bypasses blur annotation compositing during gaps and clears stale composite 
 });
 
 describe("ModernFrameRenderer Pixi lifecycle", () => {
+	beforeEach(() => {
+		pixiApplicationInstancesMock.length = 0;
+		pixiInitializationErrorsMock.length = 0;
+		pixiRendererTypesMock.length = 0;
+		vi.stubGlobal("navigator", { gpu: {} });
+		vi.stubGlobal("document", { createElement: vi.fn(() => createMockCanvas()) });
+	});
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	const initialize = (renderer: FrameRenderer) =>
+		(
+			renderer as unknown as {
+				createPixiApplication: (canvas: HTMLCanvasElement) => Promise<{ backend: string }>;
+			}
+		).createPixiApplication(createMockCanvas() as unknown as HTMLCanvasElement);
+
+	it("uses WebGL by default even when navigator.gpu exists", async () => {
+		await expect(initialize(createRenderer())).resolves.toMatchObject({ backend: "webgl" });
+		expect(pixiApplicationInstancesMock[0].init).toHaveBeenCalledWith(
+			expect.objectContaining({ preference: "webgl" }),
+		);
+	});
+
+	it.each([
+		{ zoomMotionBlur: 0.35 },
+		{ showCursor: true, cursorTelemetry: [{ timeMs: 0, cx: 0.5, cy: 0.5 }] },
+		{ wallpaper: "/wallpapers/video.mp4", backgroundBlur: 2 },
+	])("keeps GPU-filter workloads off WebGPU: %j", async (effects) => {
+		const renderer = createRenderer({ preferredRenderBackend: "webgpu", ...effects });
+		await expect(initialize(renderer)).resolves.toMatchObject({ backend: "webgl" });
+		expect(pixiApplicationInstancesMock).toHaveLength(1);
+		expect(pixiApplicationInstancesMock[0].init).toHaveBeenCalledWith(
+			expect.objectContaining({ preference: "webgl" }),
+		);
+	});
+
+	it("does not treat canvas-rasterized shadows or static blur as GPU filters", async () => {
+		await expect(
+			initialize(
+				createRenderer({
+					preferredRenderBackend: "webgpu",
+					showShadow: true,
+					shadowIntensity: 0.67,
+					backgroundBlur: 2,
+				}),
+			),
+		).resolves.toMatchObject({ backend: "webgpu" });
+	});
+
+	it("surfaces WebGL failure and the reason WebGPU was excluded without dropping effects", async () => {
+		pixiInitializationErrorsMock.push(new Error("WebGL context unavailable"));
+		const result = initialize(createRenderer({ zoomMotionBlur: 0.35 }));
+		await expect(result).rejects.toThrow("WebGL context unavailable");
+		await expect(result).rejects.toThrow(
+			"WebGPU filter resource path is not validated for: zoom/motion blur",
+		);
+		expect(pixiApplicationInstancesMock).toHaveLength(1);
+	});
+
+	it("rejects Pixi's implicit WebGPU fallback for a WebGL-only scene", async () => {
+		pixiRendererTypesMock.push(2);
+		await expect(initialize(createRenderer({ zoomMotionBlur: 0.35 }))).rejects.toThrow(
+			"Pixi selected webgpu despite requesting webgl",
+		);
+		expect(pixiApplicationInstancesMock[0].destroy).toHaveBeenCalledOnce();
+	});
+
+	it("reports the actual backend when Pixi falls back internally", async () => {
+		pixiRendererTypesMock.push(1);
+		await expect(
+			initialize(createRenderer({ preferredRenderBackend: "webgpu" })),
+		).resolves.toMatchObject({ backend: "webgl" });
+	});
+
+	it("uses a fresh canvas when falling back to another context type", async () => {
+		pixiInitializationErrorsMock.push(new Error("GPU device lost"));
+		await expect(
+			initialize(createRenderer({ preferredRenderBackend: "webgpu" })),
+		).resolves.toMatchObject({ backend: "webgl" });
+		const first = pixiApplicationInstancesMock[0].init.mock.calls[0][0].canvas;
+		const second = pixiApplicationInstancesMock[1].init.mock.calls[0][0].canvas;
+		expect(second).not.toBe(first);
+		expect(second).toMatchObject({ width: 1920, height: 1080 });
+	});
+
+	it("preserves a render resource failure as the cause and identifies the backend", async () => {
+		const cause = new TypeError(
+			"Cannot read properties of undefined (reading '_resourceType')",
+		);
+		const renderer = createRenderer();
+		Object.assign(renderer, {
+			app: {
+				render: () => {
+					throw cause;
+				},
+			},
+			videoContainer: {},
+			cameraContainer: {},
+			videoMaskGraphics: {},
+			updateAnimationState: vi.fn(),
+			rendererBackend: "webgpu",
+		});
+		const result = renderer.renderFrame(null, 0);
+		await expect(result).rejects.toMatchObject({ cause });
+		await expect(result).rejects.toThrow(
+			"[EXPORT_RENDERER_FRAME_FAILED] webgpu scene rendering failed: Cannot read properties of undefined (reading '_resourceType')",
+		);
+	});
+
 	it("continues to the next backend when failed-init cleanup would throw", async () => {
 		pixiApplicationInstancesMock.length = 0;
 		pixiInitializationErrorsMock.length = 0;

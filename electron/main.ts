@@ -17,6 +17,7 @@ import {
 } from "electron";
 import { RECORDINGS_DIR } from "./appPaths";
 import { showCursor } from "./cursorHider";
+import { resolveDisplayCaptureSource } from "./displayCaptureSource";
 import { getGpuSwitches } from "./gpuSwitches";
 import {
 	cleanupAllExportStreams,
@@ -87,7 +88,7 @@ app.on("web-contents-created", (_event, contents) => {
 });
 
 function configureGpuAccelerationSwitches() {
-	const { useAngle, useGl, disableFeatures } = getGpuSwitches(process.platform, process.env);
+	const { useAngle, useGl, disableFeatures } = getGpuSwitches(process.platform);
 	if (useAngle) {
 		app.commandLine.appendSwitch("use-angle", useAngle);
 	}
@@ -1087,29 +1088,12 @@ app.whenReady().then(async () => {
 			// resolves, before recording-state-changed is emitted.
 			reassertHudOverlayCaptureProtection();
 
-			const sourceId = getSelectedSourceId();
-			// On Linux/Wayland, calling desktopCapturer.getSources() itself
-			// invokes the xdg-desktop-portal picker. If we then return one of
-			// those sources, Chromium triggers a SECOND portal because the
-			// pre-enumerated source IDs are stale on Wayland. To collapse this
-			// into a single portal invocation, when the Linux portal sentinel
-			// is set we skip getSources entirely and hand back a synthetic
-			// source id; Chromium then opens the portal once to actually
-			// resolve the capture.
-			// Default to the sentinel on Linux when no source has been
-			// pre-selected (e.g. fresh session where the renderer skipped the
-			// source picker entirely). This avoids calling getSources() which
-			// would itself trigger an extra portal dialog.
-			const isLinuxPortalSentinel =
-				process.platform === "linux" && (sourceId === "screen:linux-portal" || !sourceId);
-			if (isLinuxPortalSentinel) {
-				callback({ video: { id: "screen:0:0", name: "Entire screen" } });
-				return;
-			}
-			const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
-			const source = sourceId
-				? (sources.find((s) => s.id === sourceId) ?? sources[0])
-				: sources[0];
+			const source = await resolveDisplayCaptureSource({
+				sourceId: getSelectedSourceId(),
+				platform: process.platform,
+				env: process.env,
+				getSources: (types) => desktopCapturer.getSources({ types }),
+			});
 			if (source) {
 				callback({
 					video: { id: source.id, name: source.name },

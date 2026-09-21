@@ -149,3 +149,25 @@ export function planLightningExportRoutes(options: {
 export function getDefaultLightningRenderBackend(): ExportRenderBackend {
 	return "webgl";
 }
+
+export function planLightningRenderBackends(options: {
+	preferredBackend?: ExportRenderBackend;
+	webgpuAvailable: boolean;
+	gpuFilterEffects: readonly string[];
+}): { backends: ExportRenderBackend[]; webgpuSkipReason?: string } {
+	// navigator.gpu and successful device initialization do not validate Pixi's
+	// filter bind groups. Keep these workloads on WebGL until the WebGPU resource
+	// path is validated; never silently drop effects to make an export succeed.
+	const webgpuSkipReason =
+		options.gpuFilterEffects.length > 0
+			? `WebGPU filter resource path is not validated for: ${options.gpuFilterEffects.join(", ")}. Using WebGL to preserve effects.`
+			: !options.webgpuAvailable
+				? "WebGPU runtime is unavailable in this environment."
+				: undefined;
+	if (webgpuSkipReason) {
+		return { backends: ["webgl"], webgpuSkipReason };
+	}
+
+	const preferred = options.preferredBackend ?? getDefaultLightningRenderBackend();
+	return { backends: preferred === "webgpu" ? ["webgpu", "webgl"] : ["webgl", "webgpu"] };
+}

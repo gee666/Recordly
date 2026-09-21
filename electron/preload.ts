@@ -512,6 +512,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openSourceSelector: () => {
 		return ipcRenderer.invoke("open-source-selector");
 	},
+	selectRecordingRegion: () => ipcRenderer.invoke("select-recording-region"),
+	clearSourceHighlights: () => ipcRenderer.invoke("clear-source-highlights"),
+	onHudOverlayToolbarOffset: (callback: (offsetY: number) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, offsetY: number) => callback(offsetY);
+		ipcRenderer.on("hud-overlay-toolbar-offset", listener);
+		return () => ipcRenderer.removeListener("hud-overlay-toolbar-offset", listener);
+	},
 	selectSource: (source: ProcessedDesktopSource) => {
 		return ipcRenderer.invoke("select-source", source);
 	},

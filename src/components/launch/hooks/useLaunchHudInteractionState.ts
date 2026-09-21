@@ -15,17 +15,20 @@ export function useLaunchHudInteractionState({
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 	useEffect(() => {
+		if (timeoutRef.current) clearTimeout(timeoutRef.current);
 		if (openId !== null) {
-			if (timeoutRef.current) clearTimeout(timeoutRef.current);
 			window.electronAPI?.hudOverlaySetIgnoreMouse?.(false);
 		} else {
-			// Proactively check if we should ignore mouse when popover closes
-			setTimeout(() => {
+			// Cancel this check if another menu opens before the delay elapses.
+			timeoutRef.current = setTimeout(() => {
 				if (!isMouseOverHudRef.current) {
 					window.electronAPI?.hudOverlaySetIgnoreMouse?.(true);
 				}
 			}, 150);
 		}
+		return () => {
+			if (timeoutRef.current) clearTimeout(timeoutRef.current);
+		};
 	}, [openId]);
 
 	useEffect(() => {

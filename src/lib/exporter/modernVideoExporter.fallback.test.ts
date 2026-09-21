@@ -364,6 +364,61 @@ describe("ModernVideoExporter native fallback routing", () => {
 		expect(mocks.muxerFinalize).toHaveBeenCalledTimes(1);
 	});
 
+	it("passes renderer preference through and does not retry shader failures as decode errors", async () => {
+		const { FrameRenderer } = await import("./modernFrameRenderer");
+		const originalMessage = "Cannot read properties of undefined (reading '_resourceType')";
+		mocks.streamingDecoderDecodeAll.mockRejectedValueOnce(
+			new Error(
+				`[EXPORT_RENDERER_FRAME_FAILED] webgpu scene rendering failed: ${originalMessage}`,
+			),
+		);
+		const exporter = new ModernVideoExporter({
+			videoUrl: "file:///recording.mp4",
+			width: 720,
+			height: 404,
+			frameRate: 30,
+			bitrate: 4_000_000,
+			wallpaper: "#101010",
+			backendPreference: "webcodecs",
+			preferredRenderBackend: "webgl",
+		} as never) as unknown as {
+			export: () => Promise<{ success: boolean; error?: string }>;
+			initializeEncoder: () => Promise<unknown>;
+		};
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(exporter, "initializeEncoder").mockResolvedValue({
+			codec: "avc1.640034",
+			hardwareAcceleration: "prefer-hardware",
+		});
+		const result = await exporter.export();
+		expect(FrameRenderer).toHaveBeenLastCalledWith(
+			expect.objectContaining({ preferredRenderBackend: "webgl" }),
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain(originalMessage);
+		expect(result.error).toContain("Failure stage: Scene rendering");
+		expect(result.error).toContain("Retry with the WebGL renderer");
+		expect(result.error).not.toContain("remux or convert");
+		expect(result.error).not.toContain("Linux Lightning exports can use");
+		expect(mocks.streamingDecoderDecodeAll).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		"[EXPORT_RENDERER_INIT_FAILED] WebGL context unavailable",
+		"Cannot read properties of undefined (reading '_resourceType')",
+	])("diagnoses renderer failures without blaming the encoder: %s", (message) => {
+		const exporter = new ModernVideoExporter({
+			width: 720,
+			height: 404,
+			frameRate: 30,
+			bitrate: 4_000_000,
+		} as never) as unknown as { buildLightningExportError: (error: unknown) => string };
+		const report = exporter.buildLightningExportError(new Error(message));
+		expect(report).toContain(`Reason: ${message}`);
+		expect(report).toContain("Failure stage: Scene rendering");
+		expect(report).toContain("legacy export pipeline");
+	});
+
 	it("builds actionable diagnostics for input decoder failures", () => {
 		vi.stubGlobal("navigator", {
 			platform: "Win32",

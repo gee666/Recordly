@@ -61,6 +61,7 @@ function LaunchWindowContent() {
 		recording,
 		paused,
 		finalizing,
+		isStartingRecording,
 		countdownActive,
 		toggleRecording,
 		pauseRecording,
@@ -96,6 +97,7 @@ function LaunchWindowContent() {
 		refreshProjectLibrary,
 	} = useLaunchWindowActions();
 
+	const sourceSelectionLocked = isStartingRecording || countdownActive || recording || finalizing;
 	const showWebcamControls = webcamEnabled && !recording;
 	const { devices, selectedDeviceId, setSelectedDeviceId } = useMicrophoneDevices(
 		microphoneEnabled || openId === "mic",
@@ -109,6 +111,9 @@ function LaunchWindowContent() {
 
 	const {
 		hudOverlayMousePassthroughSupported,
+		hudOverlayWindowDragSupported,
+		sourceSelectionSupported,
+		hudToolbarOffsetY,
 		platform,
 		appVersion,
 		hideHudFromCapture,
@@ -172,6 +177,7 @@ function LaunchWindowContent() {
 		handleHudBarPointerMove,
 		handleHudBarPointerUp,
 	} = useHudBarDrag({
+		dragWindow: hudOverlayMousePassthroughSupported === false && hudOverlayWindowDragSupported,
 		hudContentRef,
 		hudBarRef,
 		recordingWebcamPreviewContainerRef,
@@ -223,14 +229,17 @@ function LaunchWindowContent() {
 
 	const idleControls = (
 		<>
-			{platform !== "linux" && (
+			{(platform !== "linux" || sourceSelectionSupported) && (
 				<>
 					<SourcePopover
+						disabled={sourceSelectionLocked}
+						allowRegionSelection={platform === "linux" && sourceSelectionSupported}
 						selectedSource={selectedSource}
 						onSourceSelect={handleSourceSelect}
 						onOpen={beginInteractiveHudAction}
 						trigger={
 							<Button
+								disabled={sourceSelectionLocked}
 								variant="outline"
 								size="lg"
 								className={`${styles.electronNoDrag} group gap-2 px-3 min-w-0 max-w-[180px] rounded-[11px] font-medium text-[12px] shrink-0 border-[var(--launch-border)] bg-[var(--launch-surface)] text-[var(--launch-text)] hover:border-[var(--launch-border-strong)] hover:bg-[var(--launch-hover)] transition-all ${openId === "sources" ? "border-[var(--launch-border-strong)] bg-[var(--launch-hover)]" : ""}`}
@@ -292,6 +301,10 @@ function LaunchWindowContent() {
 			<WebcamPopover
 				disabled={recording}
 				webcamEnabled={webcamEnabled}
+				onToggleWebcam={() => {
+					setWebcamEnabled(!webcamEnabled);
+					requestClose("webcam");
+				}}
 				onDisableWebcam={() => setWebcamEnabled(false)}
 				canToggleFloatingPreview={canToggleFloatingWebcamPreview(
 					hudOverlayMousePassthroughSupported,
@@ -349,14 +362,14 @@ function LaunchWindowContent() {
 				type="button"
 				className={`${styles.recBtn} ${styles.electronNoDrag}`}
 				onClick={
-					hasSelectedSource || platform === "linux"
+					hasSelectedSource || (platform === "linux" && !sourceSelectionSupported)
 						? toggleRecording
 						: () => {
 								beginInteractiveHudAction();
 								requestOpen("sources");
 							}
 				}
-				disabled={countdownActive}
+				disabled={isStartingRecording || countdownActive || finalizing}
 				title={t("recording.record")}
 			>
 				<div className={styles.recDot} />
@@ -438,7 +451,8 @@ function LaunchWindowContent() {
 
 	const hudMode = finalizing ? "finalizing" : recording ? "recording" : "idle";
 	const useNativeHudBarDrag =
-		platform === "linux" || hudOverlayMousePassthroughSupported === false;
+		!hudOverlayWindowDragSupported &&
+		(platform === "linux" || hudOverlayMousePassthroughSupported === false);
 	const shouldAnimateHudLayout = !recording && !showRecordingWebcamPreview && !isHudDragging;
 
 	return (
@@ -447,7 +461,7 @@ function LaunchWindowContent() {
 		>
 			<div
 				className="w-full flex justify-center bg-transparent overflow-visible items-end pb-5 pointer-events-none"
-				style={{ height: "100vh" }}
+				style={{ height: "100vh", transform: `translateY(${hudToolbarOffsetY}px)` }}
 			>
 				<div
 					ref={hudContentRef}
@@ -469,16 +483,23 @@ function LaunchWindowContent() {
 								onMouseLeave={handleHudMouseLeave}
 							>
 								<div
-									// Linux compositors and non-passthrough Windows fallback windows
-									// need native window dragging; the JS drag path only translates
-									// content inside the HUD window.
-									className={`flex items-center px-0.5 cursor-grab active:cursor-grabbing ${
+									// Wayland requires native dragging. X11 moves the compact
+									// window via IPC; full-screen overlays translate their content.
+									className={`${styles.dragHandle} flex items-center px-0.5 cursor-grab active:cursor-grabbing ${
 										useNativeHudBarDrag ? styles.electronDrag : ""
 									}`}
-									onPointerDown={handleHudBarPointerDown}
-									onPointerMove={handleHudBarPointerMove}
-									onPointerUp={handleHudBarPointerUp}
-									onPointerCancel={handleHudBarPointerUp}
+									onPointerDown={
+										useNativeHudBarDrag ? undefined : handleHudBarPointerDown
+									}
+									onPointerMove={
+										useNativeHudBarDrag ? undefined : handleHudBarPointerMove
+									}
+									onPointerUp={
+										useNativeHudBarDrag ? undefined : handleHudBarPointerUp
+									}
+									onPointerCancel={
+										useNativeHudBarDrag ? undefined : handleHudBarPointerUp
+									}
 								>
 									<RxDragHandleDots2 size={14} className="text-[#6b6b78]" />
 								</div>

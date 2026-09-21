@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getHudOverlayWindowBounds,
+	getHudOverlayToolbarOffset,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
@@ -141,6 +142,33 @@ describe("resizeHudOverlayFallbackBounds", () => {
 			y: 520,
 			width: 860,
 			height: 540,
+		});
+	});
+});
+
+describe("fallback toolbar anchor", () => {
+	it("keeps a top-edge toolbar at the same desktop Y while menus expand and collapse", () => {
+		const workArea = { x: 0, y: 0, width: 1920, height: 1080 };
+		const compact = { x: 300, y: 0, width: 860, height: 160 };
+		const expanded = resizeHudOverlayFallbackBounds(workArea, compact, true);
+		const offset = getHudOverlayToolbarOffset(compact, expanded);
+		expect(expanded).toEqual({ ...compact, height: 540 });
+		expect(offset).toBe(-380);
+		expect(expanded.y + expanded.height + offset).toBe(compact.y + compact.height);
+		const restored = resizeHudOverlayFallbackBounds(workArea, expanded, false, offset);
+		expect(restored).toEqual(compact);
+		expect(getHudOverlayToolbarOffset(expanded, restored, offset)).toBe(0);
+	});
+
+	it("retains a compensated anchor after dragging an expanded window", () => {
+		const workArea = { x: -1920, y: -200, width: 1920, height: 1080 };
+		const compact = { x: -1700, y: -200, width: 860, height: 160 };
+		const expanded = resizeHudOverlayFallbackBounds(workArea, compact, true);
+		const offset = getHudOverlayToolbarOffset(compact, expanded);
+		const moved = { ...expanded, y: expanded.y + 100 };
+		expect(resizeHudOverlayFallbackBounds(workArea, moved, false, offset)).toEqual({
+			...compact,
+			y: -100,
 		});
 	});
 });

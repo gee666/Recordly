@@ -86,10 +86,13 @@ export function HudPopover({
 				unstyled
 				side="top"
 				align={align}
-				sideOffset={8}
+				// Clear the toolbar padding as well as the trigger button itself.
+				sideOffset={24}
 				avoidCollisions
 				collisionPadding={10}
-				usePortal={false}
+				// Escape the toolbar's animated transform/filter and nowrap layout.
+				usePortal
+				animated={false}
 				onMouseEnter={onMouseEnter}
 			>
 				{children}

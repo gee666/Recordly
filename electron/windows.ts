@@ -7,11 +7,17 @@ import { supportsHudCaptureProtection } from "../src/lib/hudCaptureProtection";
 import { USER_DATA_PATH } from "./appPaths";
 import {
 	getHudOverlayWindowBounds,
+	getHudOverlayToolbarOffset,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
-import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
+import {
+	getHudOverlayTaskbarOptions,
+	supportsHudOverlayWindowPositioning,
+} from "./hudOverlayWindowOptions";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
+import { setRecordingRegionOutlineActive } from "./recordingRegionWindow";
+import { isLikelyLinuxWaylandSession } from "./ipc/register/sourceMapping";
 
 const electronWindowsDir = path.dirname(fileURLToPath(import.meta.url));
 const nodeRequire = createRequire(import.meta.url);
@@ -31,6 +37,7 @@ let hudOverlayWindow: BrowserWindow | null = null;
 let hudOverlayHiddenFromCapture = true;
 let hudOverlayCaptureProtectionLoaded = false;
 let hudOverlayFallbackExpanded = false;
+let hudOverlayToolbarOffsetY = 0;
 let hudOverlayIgnoringMouse = true;
 let hudOverlaySourceSelectionActive = false;
 let hudOverlayMouseReassertTimer: NodeJS.Timeout | null = null;
@@ -207,6 +214,15 @@ function getHudOverlayBounds() {
 		recordingActive: hudOverlayRecordingActive,
 		webcamPreviewVisible: hudOverlayWebcamPreviewVisible,
 	});
+	const hud = getHudOverlayWindow();
+	if (!isHudOverlayMousePassthroughSupported() && hud && hudUserPosition) {
+		return resizeHudOverlayFallbackBounds(
+			workArea,
+			hud.getBounds(),
+			fallbackExpanded,
+			hudOverlayToolbarOffsetY,
+		);
+	}
 	return getHudOverlayWindowBounds(
 		workArea,
 		isHudOverlayMousePassthroughSupported(),
@@ -214,11 +230,26 @@ function getHudOverlayBounds() {
 	);
 }
 
+function setHudOverlayBounds(bounds: Electron.Rectangle) {
+	const hud = getHudOverlayWindow();
+	if (!hud) return;
+	const previous = hud.getBounds();
+	hud.setBounds(bounds, false);
+	if (!isHudOverlayMousePassthroughSupported()) {
+		hudOverlayToolbarOffsetY = getHudOverlayToolbarOffset(
+			previous,
+			hud.getBounds(),
+			hudOverlayToolbarOffsetY,
+		);
+		hud.webContents.send("hud-overlay-toolbar-offset", hudOverlayToolbarOffsetY);
+	}
+}
+
 function applyHudOverlayBounds() {
 	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
 		return;
 	}
-	hudOverlayWindow.setBounds(getHudOverlayBounds(), false);
+	setHudOverlayBounds(getHudOverlayBounds());
 
 	positionUpdateToastWindow();
 	if (!hudOverlayWindow.isVisible()) {
@@ -266,8 +297,7 @@ function positionUpdateToastWindow() {
 }
 
 function setHudOverlayFallbackExpanded(expanded: boolean) {
-	if (hudOverlayRecordingActive) {
-		hudOverlayFallbackExpanded = false;
+	if (hudOverlayRecordingActive || hudOverlayFallbackExpanded === expanded) {
 		return;
 	}
 
@@ -285,8 +315,9 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 		workArea,
 		hudOverlayWindow.getBounds(),
 		expanded,
+		hudOverlayToolbarOffsetY,
 	);
-	hudOverlayWindow.setBounds(nextBounds, false);
+	setHudOverlayBounds(nextBounds);
 	positionUpdateToastWindow();
 	if (hudOverlayWindow.isVisible()) {
 		hudOverlayWindow.moveTop();
@@ -312,9 +343,9 @@ function setHudOverlayMousePassthrough(ignore: boolean) {
 	}
 
 	if (!isHudOverlayMousePassthroughSupported()) {
-		if (process.platform !== "linux") {
-			setHudOverlayFallbackExpanded(!ignore);
-		}
+		// Linux cannot forward mouse movement through an ignored window. Keep it
+		// interactive and grow the compact native window to fit the HUD menus.
+		setHudOverlayFallbackExpanded(!ignore);
 		hudOverlayWindow.setIgnoreMouseEvents(false);
 		return;
 	}
@@ -342,7 +373,14 @@ ipcMain.on("hud-overlay-set-source-selection-active", (_event, active: boolean) 
 	setHudOverlayMousePassthrough(hudOverlayIgnoringMouse);
 });
 
-// Keep compatibility with existing drag IPC/state.
+function isHudOverlayWindowPositioningSupported(): boolean {
+	return supportsHudOverlayWindowPositioning(
+		process.platform,
+		process.env.XDG_SESSION_TYPE || (process.env.WAYLAND_DISPLAY ? "wayland" : "x11"),
+		app.commandLine.getSwitchValue("ozone-platform"),
+	);
+}
+
 let hudUserPosition: { x: number; y: number } | null = null;
 let hudDragOffset: { x: number; y: number } | null = null;
 let hudDragLastCursor: { x: number; y: number } | null = null;
@@ -351,13 +389,8 @@ let hudDragFixedSize: { width: number; height: number } | null = null;
 ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY: number) => {
 	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed()) return;
 
-	// On Linux the compositor (especially Wayland) refuses programmatic window
-	// placement, so BrowserWindow.setBounds() with x/y is silently ignored and
-	// the HUD appears "stuck".  The renderer marks the drag handle as
-	// -webkit-app-region: drag on Linux, letting the OS move the window for us.
-	// The resulting position is captured by the win.on("moved", ...) listener
-	// below so `hudUserPosition` stays in sync.
-	if (process.platform === "linux") {
+	// Native Wayland must use an app-region drag; X11 can move via pointer IPC.
+	if (!isHudOverlayWindowPositioningSupported()) {
 		return;
 	}
 
@@ -418,6 +451,9 @@ ipcMain.handle("get-hud-overlay-mouse-passthrough-supported", () => {
 	return {
 		success: true,
 		supported: isHudOverlayMousePassthroughSupported(),
+		windowDragSupported: isHudOverlayWindowPositioningSupported(),
+		sourceSelectionSupported:
+			process.platform !== "linux" || !isLikelyLinuxWaylandSession(process.env),
 	};
 });
 
@@ -449,6 +485,7 @@ ipcMain.handle("set-hud-overlay-capture-protection", (_event, enabled: boolean) 
 export function createHudOverlayWindow(): BrowserWindow {
 	const perfStart = Date.now();
 	loadHudOverlayCaptureProtectionSetting();
+	hudOverlayToolbarOffsetY = 0;
 	hudOverlayFallbackExpanded = false;
 	hudOverlayWebcamPreviewVisible = false;
 	const initialBounds = getHudOverlayBounds();
@@ -463,6 +500,9 @@ export function createHudOverlayWindow(): BrowserWindow {
 		transparent: true,
 		backgroundColor: "#00000000",
 		resizable: false,
+		maximizable: false,
+		fullscreenable: false,
+		autoHideMenuBar: true,
 		alwaysOnTop: true,
 		// The HUD is Recordly's persistent top-level window, so it owns the
 		// Windows taskbar entry while auxiliary overlays stay hidden there.
@@ -477,6 +517,11 @@ export function createHudOverlayWindow(): BrowserWindow {
 			backgroundThrottling: false,
 		},
 	});
+	// Frameless Linux windows still inherit the application's native menu.
+	// The toolbar has its own settings menu and needs its entire content area.
+	if (process.platform !== "darwin") {
+		win.setMenu(null);
+	}
 	// Keep the recording controls and webcam above normal and full-screen apps.
 	// Transparent regions remain click-through via setIgnoreMouseEvents().
 	win.setAlwaysOnTop(true, "screen-saver");
@@ -587,10 +632,9 @@ export function createHudOverlayWindow(): BrowserWindow {
 
 	hudOverlayWindow = win;
 
-	// On Linux the HUD is dragged by the OS via -webkit-app-region (Wayland
-	// forbids client-side positioning). Mirror moved bounds into drag state.
+	// "moved" is macOS/Windows-only; Linux emits "move" after native dragging.
 	if (process.platform === "linux") {
-		win.on("moved", () => {
+		win.on("move", () => {
 			if (win.isDestroyed()) return;
 			const { x, y } = win.getBounds();
 			hudUserPosition = { x, y };
@@ -681,6 +725,7 @@ export function reassertHudOverlayMousePassthrough(): void {
 }
 
 export function setHudOverlayRecordingActive(recording: boolean): void {
+	setRecordingRegionOutlineActive(Boolean(recording));
 	hudOverlayRecordingActive = Boolean(recording);
 	hudOverlayFallbackExpanded = false;
 	applyHudOverlayBounds();

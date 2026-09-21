@@ -166,6 +166,23 @@ export function getCursorCaptureElapsedMs(nowMs = Date.now()) {
 
 export function getNormalizedCursorPoint() {
 	const fallbackCursor = getScreen().getCursorScreenPoint();
+	const region = selectedSource?.captureRegion;
+	if (region) {
+		// Electron reports desktop DIPs, matching area-selection coordinates even
+		// on a secondary display. Native hook pixels use a different DPI basis.
+		return {
+			cx: clamp(
+				(fallbackCursor.x - region.displayBounds.x - region.x) / Math.max(1, region.width),
+				0,
+				1,
+			),
+			cy: clamp(
+				(fallbackCursor.y - region.displayBounds.y - region.y) / Math.max(1, region.height),
+				0,
+				1,
+			),
+		};
+	}
 	const linuxCursorCache = process.platform === "linux" ? linuxCursorScreenPoint : null;
 	const isLinuxCacheFresh = !!linuxCursorCache && Date.now() - linuxCursorCache.updatedAt <= 1000;
 

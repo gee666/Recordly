@@ -229,6 +229,8 @@ interface Window {
 		getHudOverlayMousePassthroughSupported: () => Promise<{
 			success: boolean;
 			supported: boolean;
+			windowDragSupported?: boolean;
+			sourceSelectionSupported?: boolean;
 		}>;
 		setHudOverlayCaptureProtection: (
 			enabled: boolean,
@@ -238,6 +240,14 @@ interface Window {
 		switchToEditor: () => Promise<void>;
 		openSourceSelector: () => Promise<void>;
 		selectSource: (source: ProcessedDesktopSource) => Promise<ProcessedDesktopSource>;
+		clearSourceHighlights: () => Promise<void>;
+		selectRecordingRegion: () => Promise<{
+			success: boolean;
+			canceled?: boolean;
+			error?: string;
+			source?: ProcessedDesktopSource;
+		}>;
+		onHudOverlayToolbarOffset: (callback: (offsetY: number) => void) => () => void;
 		showSourceHighlight: (source: ProcessedDesktopSource) => Promise<{ success: boolean }>;
 		getSelectedSource: () => Promise<ProcessedDesktopSource | null>;
 		onSelectedSourceChanged: (
@@ -934,6 +944,7 @@ interface Window {
 }
 
 interface ProcessedDesktopSource {
+	captureRegion?: import("../src/lib/recordingRegion").RecordingRegion;
 	id: string;
 	name: string;
 	display_id: string;

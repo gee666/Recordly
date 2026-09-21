@@ -4,6 +4,7 @@ import {
 	getDefaultLightningRenderBackend,
 	normalizeLightningRuntimePlatform,
 	planLightningExportRoutes,
+	planLightningRenderBackends,
 	shouldPreferNativeAutoBackend,
 	shouldPreferNativeStaticLayoutBeforeBreeze,
 } from "./backendPolicy";
@@ -25,6 +26,32 @@ describe("backendPolicy", () => {
 
 	it("keeps Lightning exports on the stable WebGL renderer by default", () => {
 		expect(getDefaultLightningRenderBackend()).toBe("webgl");
+	});
+
+	it.each([
+		undefined,
+		"webgl",
+		"webgpu",
+	] as const)("requires WebGL for GPU filters even with preference %s", (preferredBackend) => {
+		const plan = planLightningRenderBackends({
+			preferredBackend,
+			webgpuAvailable: true,
+			gpuFilterEffects: ["zoom/motion blur", "cursor shadows"],
+		});
+		expect(plan.backends).toEqual(["webgl"]);
+		expect(plan.webgpuSkipReason).toContain("zoom/motion blur, cursor shadows");
+	});
+
+	it.each([
+		[undefined, true, ["webgl", "webgpu"]],
+		["webgl", true, ["webgl", "webgpu"]],
+		["webgpu", true, ["webgpu", "webgl"]],
+		["webgpu", false, ["webgl"]],
+	] as const)("plans filter-free rendering (%s, WebGPU=%s)", (preferredBackend, webgpuAvailable, backends) => {
+		expect(
+			planLightningRenderBackends({ preferredBackend, webgpuAvailable, gpuFilterEffects: [] })
+				.backends,
+		).toEqual(backends);
 	});
 
 	it("keeps Windows auto exports on the streaming route by default", () => {

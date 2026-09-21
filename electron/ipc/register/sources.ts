@@ -1,7 +1,13 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { app, BrowserWindow, desktopCapturer, ipcMain, systemPreferences } from "electron";
-import { reassertHudOverlayMousePassthrough } from "../../windows";
+import { getHudOverlayWindow, reassertHudOverlayMousePassthrough } from "../../windows";
+import { clearScreenHighlight, showScreenHighlight } from "../../screenHighlight";
+import {
+	selectRecordingRegion,
+	setSelectedRecordingRegion,
+	previewRecordingRegionOutline,
+} from "../../recordingRegionWindow";
 import { ALLOW_RECORDLY_WINDOW_CAPTURE } from "../constants";
 import {
 	getNativeMacWindowSources,
@@ -10,11 +16,15 @@ import {
 	stopWindowBoundsCapture,
 } from "../cursor/bounds";
 import { getDisplayBoundsForSource, getDisplayWorkAreaForSource } from "../recording/ffmpeg";
-import { selectedSource, setSelectedSource } from "../state";
+import { isCursorCaptureActive, selectedSource, setSelectedSource } from "../state";
 import type { SelectedSource, WindowBounds } from "../types";
 import { getScreen, parseWindowId } from "../utils";
 import { bringWindowsWindowForward, resolveWindowsWindowBounds } from "../windowsWindowControl";
-import { getScreenSourceIdForDisplay } from "./sourceMapping";
+import {
+	getScreenSourceIdForDisplay,
+	isLikelyLinuxWaylandSession,
+	matchLinuxScreenSource,
+} from "./sourceMapping";
 
 const execFileAsync = promisify(execFile);
 const SOURCE_LIST_CACHE_TTL_MS = 1200;
@@ -183,8 +193,8 @@ export function registerSourceHandlers({
 				.filter((source) => source.id.startsWith("screen:"))
 				.map((source) => [String(source.display_id ?? ""), source] as const),
 		);
-		// On Linux, desktopCapturer display_id values may not match screen.getAllDisplays() IDs.
-		// Keep an ordered list so we can fall back to position-based matching.
+		// X11 IDs require low-bit matching; source enumeration order is not spatial
+		// display order (notably when the primary monitor is on the right).
 		const electronScreenSourcesByIndex = electronSources.filter((source) =>
 			source.id.startsWith("screen:"),
 		);
@@ -192,10 +202,12 @@ export function registerSourceHandlers({
 		const screenSources = displays.map((display, index) => {
 			const displayId = String(display.id);
 			const matchedSource =
-				electronScreenSourcesByDisplayId.get(displayId) ??
-				(electronScreenSourcesByIndex.length === displays.length
-					? electronScreenSourcesByIndex[index]
-					: undefined);
+				process.platform === "linux"
+					? matchLinuxScreenSource(display.id, electronScreenSourcesByIndex)
+					: (electronScreenSourcesByDisplayId.get(displayId) ??
+						(electronScreenSourcesByIndex.length === displays.length
+							? electronScreenSourcesByIndex[index]
+							: undefined));
 			const displayName =
 				displayId === primaryDisplayId
 					? `Screen ${index + 1} (Primary)`
@@ -381,11 +393,83 @@ export function registerSourceHandlers({
 		}
 	});
 
+	ipcMain.handle("clear-source-highlights", () => clearScreenHighlight());
+
+	ipcMain.handle("select-recording-region", async () => {
+		if (isCursorCaptureActive)
+			return { success: false, error: "Stop recording before changing the capture area." };
+		if (process.platform !== "linux" || isLikelyLinuxWaylandSession(process.env)) {
+			return {
+				success: false,
+				error: "Area selection currently requires an X11 desktop session.",
+			};
+		}
+		const hud = getHudOverlayWindow();
+		const wasVisible = hud?.isVisible();
+		try {
+			if (wasVisible) hud?.hide();
+			clearScreenHighlight();
+			const captureRegion = await selectRecordingRegion(getScreen().getAllDisplays());
+			if (!captureRegion || isCursorCaptureActive) return { success: false, canceled: true };
+			// Resolve the monitor from the actual drag, never from menu order or the HUD's display.
+			const displays = [...getScreen().getAllDisplays()].sort(
+				(a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y || a.id - b.id,
+			);
+			const displayIndex = displays.findIndex(
+				(d) => String(d.id) === captureRegion.displayId,
+			);
+			const display = displays[displayIndex];
+			if (
+				!display ||
+				["x", "y", "width", "height"].some(
+					(key) =>
+						display.bounds[key as keyof WindowBounds] !==
+						captureRegion.displayBounds[key as keyof WindowBounds],
+				)
+			)
+				throw new Error("The display layout changed. Select the area again.");
+			const sources = await desktopCapturer.getSources({
+				types: ["screen"],
+				thumbnailSize: { width: 0, height: 0 },
+			});
+			const source = matchLinuxScreenSource(display.id, sources);
+			if (!source)
+				throw new Error(
+					"The selected monitor is unavailable for capture. Select the area again.",
+				);
+			if (isCursorCaptureActive) return { success: false, canceled: true };
+			setSelectedSource({
+				id: source.id,
+				display_id: String(display.id),
+				sourceType: "screen",
+				captureRegion,
+				name: `Area ${captureRegion.width} × ${captureRegion.height} — Screen ${displayIndex + 1}`,
+			});
+			setSelectedRecordingRegion(captureRegion);
+			broadcastSelectedSourceChange();
+			stopWindowBoundsCapture();
+			previewRecordingRegionOutline();
+			return { success: true, source: selectedSource };
+		} catch (error) {
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : String(error),
+			};
+		} finally {
+			if (wasVisible && hud && !hud.isDestroyed()) hud.showInactive();
+		}
+	});
+
 	ipcMain.handle("select-source", async (_, source: SelectedSource) => {
+		if (isCursorCaptureActive)
+			throw new Error("Stop recording before changing the capture source.");
 		if (source.id?.startsWith("window:")) {
 			await bringSelectedWindowForward(source);
 		}
+		if (isCursorCaptureActive)
+			throw new Error("Stop recording before changing the capture source.");
 		setSelectedSource(source);
+		setSelectedRecordingRegion(source.captureRegion ?? null);
 		broadcastSelectedSourceChange();
 		stopWindowBoundsCapture();
 		const sourceSelectorWin = getSourceSelectorWindow();
@@ -397,12 +481,27 @@ export function registerSourceHandlers({
 	});
 
 	ipcMain.handle("show-source-highlight", async (_, source: SelectedSource) => {
+		if (isCursorCaptureActive) return { success: false };
+		if (source.captureRegion) {
+			setSelectedRecordingRegion(source.captureRegion);
+			previewRecordingRegionOutline();
+			return { success: true };
+		}
 		try {
 			const isWindow = source.id?.startsWith("window:");
 
 			// ── 1. Resolve bounds ──
 			let bounds: { x: number; y: number; width: number; height: number } | null = null;
 
+			if (source.id?.startsWith("screen:") && process.platform === "linux") {
+				const display = getScreen()
+					.getAllDisplays()
+					.find((candidate) => String(candidate.id) === source.display_id);
+				// Do not silently highlight the primary display for a stale/unknown ID.
+				if (!display) return { success: false };
+				await showScreenHighlight(display.bounds);
+				return { success: true };
+			}
 			if (source.id?.startsWith("screen:")) {
 				bounds =
 					process.platform === "darwin"
@@ -578,6 +677,25 @@ body{background:transparent;overflow:hidden;width:100vw;height:100vh}
 	});
 
 	ipcMain.handle("get-selected-source", () => {
+		if (selectedSource?.captureRegion) {
+			const region = selectedSource.captureRegion;
+			const display = getScreen()
+				.getAllDisplays()
+				.find((candidate) => String(candidate.id) === region.displayId);
+			if (
+				!display ||
+				["x", "y", "width", "height"].some(
+					(key) =>
+						display.bounds[key as keyof WindowBounds] !==
+						region.displayBounds[key as keyof WindowBounds],
+				)
+			) {
+				setSelectedRecordingRegion(null);
+				throw new Error(
+					"The selected display layout changed. Select the recording area again.",
+				);
+			}
+		}
 		return selectedSource;
 	});
 

@@ -1,4 +1,7 @@
+import type { RecordingRegion } from "@/lib/recordingRegion";
+
 export interface DesktopSource {
+	captureRegion?: RecordingRegion;
 	id: string;
 	name: string;
 	thumbnail: string | null;
@@ -37,6 +40,7 @@ export function mapRawSource(s: DesktopSource): DesktopSource {
 	}
 	return {
 		id: s.id,
+		captureRegion: s.captureRegion,
 		name: displayName,
 		thumbnail: s.thumbnail,
 		display_id: s.display_id,

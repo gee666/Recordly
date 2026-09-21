@@ -1,4 +1,6 @@
 .source-selector-popover {
+	max-width: calc(100vw - 20px);
+	white-space: normal;
 	background: var(--launch-surface);
 	border: 1px solid var(--launch-border);
 	border-radius: 16px;
@@ -78,6 +80,7 @@
 
 /* Support for Firefox */
 .source-selector-scroll {
+	max-height: min(320px, calc(var(--radix-popover-content-available-height, 322px) - 2px));
 	scrollbar-width: thin;
 	scrollbar-color: rgba(107, 107, 120, 0.2) transparent;
 }

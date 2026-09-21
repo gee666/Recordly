@@ -1,8 +1,11 @@
 import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { getCaptureErrorMessage } from "@/lib/captureErrors";
 import { canShowFloatingWebcamPreview } from "../floatingWebcamPreview";
 
 const WEBCAM_PREVIEW_DRAG_THRESHOLD = 6;
 const DEFAULT_WEBCAM_PREVIEW_OFFSET = { x: 0, y: 0 };
+const WEBCAM_PREVIEW_ERROR_TOAST_ID = "webcam-preview-error";
 
 export function useWebcamPreviewOverlay({
 	webcamEnabled,
@@ -242,7 +245,14 @@ export function useWebcamPreviewOverlay({
 				attachPreviewStreamToNode(webcamPreviewRef.current);
 				attachPreviewStreamToNode(recordingWebcamPreviewRef.current);
 			} catch (error) {
+				if (!mounted) return;
 				console.warn("Failed to start live webcam preview:", error);
+				// Keep Webcam enabled so its toggle still turns it off after a failure.
+				// Do not retry or probe: a busy camera belongs to the other application.
+				toast.error(getCaptureErrorMessage(error, "webcam"), {
+					id: WEBCAM_PREVIEW_ERROR_TOAST_ID,
+					duration: 10_000,
+				});
 			}
 		};
 
@@ -250,6 +260,7 @@ export function useWebcamPreviewOverlay({
 
 		return () => {
 			mounted = false;
+			toast.dismiss(WEBCAM_PREVIEW_ERROR_TOAST_ID);
 			const previewNode = webcamPreviewRef.current;
 			const recordingPreviewNode = recordingWebcamPreviewRef.current;
 			const previewStream = previewStreamRef.current;

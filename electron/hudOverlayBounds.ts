@@ -50,10 +50,26 @@ export function shouldExpandHudOverlayFallback({
 	return fallbackExpanded || (recordingActive && webcamPreviewVisible);
 }
 
+/** Keep the bottom-aligned toolbar at its original desktop Y when growth is clamped. */
+export function getHudOverlayToolbarOffset(
+	previous: HudOverlayWorkArea,
+	next: HudOverlayWorkArea,
+	previousOffsetY = 0,
+): number {
+	const desiredBottom = previous.y + previous.height + previousOffsetY;
+	const visibleBottom = clamp(
+		desiredBottom,
+		next.y + Math.min(NON_PASSTHROUGH_HUD_COMPACT_HEIGHT_DIP, next.height),
+		next.y + next.height,
+	);
+	return visibleBottom - (next.y + next.height);
+}
+
 export function resizeHudOverlayFallbackBounds(
 	workArea: HudOverlayWorkArea,
 	currentBounds: HudOverlayWorkArea,
 	fallbackExpanded: boolean,
+	toolbarOffsetY = 0,
 ): HudOverlayWorkArea {
 	const nextBounds = getHudOverlayWindowBounds(workArea, false, fallbackExpanded);
 	const maxX = workArea.x + workArea.width - nextBounds.width;
@@ -62,6 +78,10 @@ export function resizeHudOverlayFallbackBounds(
 	return {
 		...nextBounds,
 		x: clamp(currentBounds.x, workArea.x, maxX),
-		y: clamp(currentBounds.y + currentBounds.height - nextBounds.height, workArea.y, maxY),
+		y: clamp(
+			currentBounds.y + currentBounds.height + toolbarOffsetY - nextBounds.height,
+			workArea.y,
+			maxY,
+		),
 	};
 }

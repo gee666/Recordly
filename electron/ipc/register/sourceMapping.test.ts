@@ -1,6 +1,32 @@
 import { describe, expect, it } from "vitest";
 
-import { getScreenSourceIdForDisplay, LINUX_PORTAL_SCREEN_SOURCE_ID } from "./sourceMapping";
+import {
+	getScreenSourceIdForDisplay,
+	LINUX_PORTAL_SCREEN_SOURCE_ID,
+	matchLinuxScreenSource,
+} from "./sourceMapping";
+
+describe("matchLinuxScreenSource", () => {
+	const sources = [
+		{ id: "screen:407:0", display_id: "66" },
+		{ id: "screen:408:0", display_id: "4155486533" },
+	];
+	it("matches the actual Ubuntu 64-bit/32-bit display IDs even with reversed spatial order", () => {
+		expect(matchLinuxScreenSource(3850489720471618, [...sources].reverse())).toBe(sources[0]);
+		// This 64-bit ID has already lost its low bit when represented as a JS number.
+		expect(matchLinuxScreenSource(20982680333037892, sources)).toBe(sources[1]);
+	});
+	it("preserves exact matches and refuses ambiguous or unrelated source IDs", () => {
+		expect(matchLinuxScreenSource(66, sources)).toBe(sources[0]);
+		expect(matchLinuxScreenSource(999, sources)).toBeUndefined();
+		expect(
+			matchLinuxScreenSource(20982680333037892, [
+				...sources,
+				{ id: "other", display_id: "4155486532" },
+			]),
+		).toBeUndefined();
+	});
+});
 
 describe("getScreenSourceIdForDisplay", () => {
 	it("keeps the live Electron screen source when one is available", () => {

@@ -1,4 +1,7 @@
+import type { RecordingRegion } from "../../src/lib/recordingRegion";
+
 export type SelectedSource = {
+	captureRegion?: RecordingRegion;
 	id?: string;
 	name: string;
 	display_id?: string;

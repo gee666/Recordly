@@ -29,9 +29,16 @@ vi.mock("../utils", () => ({
 	})),
 }));
 
-import { activeCursorSamples, setActiveCursorSamples, setCursorCaptureStartTimeMs } from "../state";
+import {
+	activeCursorSamples,
+	setActiveCursorSamples,
+	setCursorCaptureStartTimeMs,
+	setSelectedSource,
+} from "../state";
+import { getScreen } from "../utils";
 import {
 	getCursorCaptureElapsedMs,
+	getNormalizedCursorPoint,
 	normalizeCursorTelemetrySamples,
 	pauseCursorCapture,
 	pauseCursorCaptureAtBoundary,
@@ -40,6 +47,41 @@ import {
 	resumeCursorCapture,
 	writeCursorTelemetry,
 } from "./telemetry";
+
+describe("area cursor coordinates", () => {
+	it.each([
+		[
+			{ x: -1200, y: 400 },
+			{ cx: 0.5, cy: 0.5 },
+		],
+		[
+			{ x: -1900, y: 50 },
+			{ cx: 0, cy: 0 },
+		],
+		[
+			{ x: 500, y: 1600 },
+			{ cx: 1, cy: 1 },
+		],
+	])("normalizes %s relative to the secondary-monitor crop", (cursor, expected) => {
+		const screen = getScreen();
+		vi.mocked(getScreen).mockReturnValueOnce({ ...screen, getCursorScreenPoint: () => cursor });
+		setSelectedSource({
+			id: "screen:408:0",
+			name: "Area",
+			display_id: "42",
+			captureRegion: {
+				x: 320,
+				y: 100,
+				width: 800,
+				height: 600,
+				displayId: "42",
+				displayBounds: { x: -1920, y: 0, width: 1920, height: 1080 },
+			},
+		});
+		expect(getNormalizedCursorPoint()).toEqual(expected);
+		setSelectedSource(null);
+	});
+});
 
 describe("cursor telemetry pause clock", () => {
 	beforeEach(() => {

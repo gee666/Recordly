@@ -604,7 +604,7 @@ export class ModernVideoExporter {
 					timelineEffects: this.config.clipRegions !== undefined,
 					width: this.config.width,
 					height: this.config.height,
-					preferredRenderBackend: undefined,
+					preferredRenderBackend: this.config.preferredRenderBackend,
 					wallpaper: this.config.wallpaper,
 					zoomRegions: this.config.zoomRegions,
 					showShadow: this.config.showShadow,
@@ -1043,6 +1043,14 @@ export class ModernVideoExporter {
 		const platform = this.getPlatformLabel();
 		const isVideoDecodeFailure = /VideoDecoder failure|VIDEO_DECODE|VIDEO_CODEC/i.test(message);
 
+		if (/EXPORT_RENDERER_|_resourceType/i.test(message)) {
+			return [
+				"The scene renderer failed; changing the codec or bitrate will not repair a missing GPU shader resource.",
+				"Retry with the WebGL renderer. If WebGL initialization also fails, check GPU drivers and Electron GPU settings; use the legacy export pipeline as a workaround.",
+				"Include this report and the original renderer error/stack from the console when reporting the problem. Effects have not been silently disabled.",
+			];
+		}
+
 		if (isVideoDecodeFailure) {
 			guidance.add(
 				"The input video decoder failed before Recordly could finish rendering the source frames.",
@@ -1113,6 +1121,9 @@ export class ModernVideoExporter {
 			`${LIGHTNING_PIPELINE_NAME} export failed.`,
 			...(failureCode ? [`Failure code: ${failureCode}`] : []),
 			...(isVideoDecodeFailure ? ["Failure stage: Input video decoding"] : []),
+			...(/EXPORT_RENDERER_|_resourceType/i.test(message)
+				? ["Failure stage: Scene rendering"]
+				: []),
 			`Reason: ${message}`,
 			`Platform: ${this.getPlatformLabel()}`,
 			`Requested backend mode: ${this.config.backendPreference ?? "auto"}`,

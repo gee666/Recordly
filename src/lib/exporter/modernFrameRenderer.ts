@@ -1,4 +1,13 @@
-import { Application, BlurFilter, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import {
+	Application,
+	BlurFilter,
+	Container,
+	Graphics,
+	Rectangle,
+	RendererType,
+	Sprite,
+	Texture,
+} from "pixi.js";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
 import { ZoomBlurFilter } from "pixi-filters/zoom-blur";
 import { buildActiveCaptionLayout } from "@/components/video-editor/captionLayout";
@@ -86,6 +95,7 @@ import {
 	renderAnnotations,
 	renderAnnotationToCanvas,
 } from "./annotationRenderer";
+import { planLightningRenderBackends } from "./backendPolicy";
 import { ForwardFrameSource } from "./forwardFrameSource";
 import { resolveMediaElementSource } from "./localMediaSource";
 import {
@@ -264,7 +274,7 @@ function toErrorMessage(error: unknown): string {
 
 function summarizeRendererAttempts(attempts: readonly PixiRendererAttempt[]): string {
 	const details = attempts.map((attempt) => `${attempt.backend}: ${attempt.message}`).join(" | ");
-	return `No supported Pixi modern renderer was available. Attempted: ${details}`;
+	return `[EXPORT_RENDERER_INIT_FAILED] No supported Pixi modern renderer was available. Attempted: ${details}`;
 }
 
 function isKnownRendererUnavailableError(error: unknown): boolean {
@@ -605,6 +615,20 @@ export class FrameRenderer {
 		console.log(`[FrameRenderer] Export renderer backend: ${this.rendererBackend}`);
 	}
 
+	private getGpuFilterEffects(): string[] {
+		const effects: string[] = [];
+		if (this.shouldUseZoomMotionBlur()) effects.push("zoom/motion blur");
+		if ((this.config.showCursor ?? true) && (this.config.cursorTelemetry?.length ?? 0) > 0) {
+			// Cursor shadows use Pixi BlurFilter even when cursor motion blur is zero.
+			effects.push("cursor shadows/motion blur");
+		}
+		if (this.config.backgroundBlur > 0 && isVideoWallpaperSource(this.config.wallpaper)) {
+			effects.push("video wallpaper blur");
+		}
+		// Video/webcam shadows and static wallpaper blur are rasterized on Canvas2D.
+		return effects;
+	}
+
 	private async createPixiApplication(
 		canvas: HTMLCanvasElement,
 	): Promise<{ app: Application; backend: ExportRenderBackend }> {
@@ -622,25 +646,22 @@ export class FrameRenderer {
 			powerPreference: "high-performance" as const,
 		};
 
-		const preferredRenderBackend = this.config.preferredRenderBackend;
-		const backendOrder: ExportRenderBackend[] =
-			preferredRenderBackend === "webgl"
-				? ["webgl", "webgpu"]
-				: preferredRenderBackend === "webgpu"
-					? ["webgpu", "webgl"]
-					: typeof navigator !== "undefined" && "gpu" in navigator
-						? ["webgpu", "webgl"]
-						: ["webgl"];
+		const plan = planLightningRenderBackends({
+			preferredBackend: this.config.preferredRenderBackend,
+			webgpuAvailable: typeof navigator !== "undefined" && !!navigator.gpu,
+			gpuFilterEffects: this.getGpuFilterEffects(),
+		});
 		const failures: PixiRendererAttempt[] = [];
+		if (plan.webgpuSkipReason) {
+			failures.push({ backend: "webgpu", message: plan.webgpuSkipReason });
+			console.info(`[FrameRenderer] ${plan.webgpuSkipReason}`);
+		}
 
-		for (const backend of backendOrder) {
-			if (backend === "webgpu" && !(typeof navigator !== "undefined" && "gpu" in navigator)) {
-				failures.push({
-					backend,
-					message: "WebGPU runtime is unavailable in this environment.",
-				});
-				continue;
-			}
+		for (const [index, backend] of plan.backends.entries()) {
+			// A canvas cannot switch context types once a failed attempt acquired one.
+			const attemptCanvas = index === 0 ? canvas : document.createElement("canvas");
+			attemptCanvas.width = this.config.width;
+			attemptCanvas.height = this.config.height;
 
 			const app = new Application();
 			const initStarted = typeof performance === "undefined" ? Date.now() : performance.now();
@@ -649,6 +670,7 @@ export class FrameRenderer {
 					app,
 					{
 						...baseOptions,
+						canvas: attemptCanvas,
 						preference: backend,
 					},
 					PIXI_RENDERER_INIT_TIMEOUT_MS,
@@ -663,7 +685,16 @@ export class FrameRenderer {
 						`Renderer initialized with unsupported fallback backend after ${elapsed}ms: ${app.renderer.constructor?.name ?? "unknown"}`,
 					);
 				}
-				return { app, backend };
+				// Pixi's preference is not a constraint: autoDetectRenderer can choose
+				// WebGPU when WebGL is unavailable (or vice versa).
+				const actualBackend =
+					app.renderer.type === RendererType.WEBGPU ? "webgpu" : "webgl";
+				if (!plan.backends.includes(actualBackend)) {
+					throw new Error(
+						`Pixi selected ${actualBackend} despite requesting ${backend}. ${plan.webgpuSkipReason}`,
+					);
+				}
+				return { app, backend: actualBackend };
 			} catch (error) {
 				const elapsed = Math.round(
 					(typeof performance === "undefined" ? Date.now() : performance.now()) -
@@ -2866,7 +2897,7 @@ export class FrameRenderer {
 			if (this.captionContainer) this.captionContainer.visible = false;
 			// Gap frames must bypass canvas annotation compositing as well as Pixi layers.
 			this.outputCanvasOverride = null;
-			this.app.render();
+			this.renderScene();
 			return;
 		}
 		if (this.captionContainer) this.captionContainer.visible = true;
@@ -2957,6 +2988,19 @@ export class FrameRenderer {
 		await this.renderOutput(timeMs);
 	}
 
+	private renderScene(): void {
+		try {
+			this.app!.render();
+		} catch (cause) {
+			throw Object.assign(
+				new Error(
+					`[EXPORT_RENDERER_FRAME_FAILED] ${this.rendererBackend} scene rendering failed: ${toErrorMessage(cause)}. GPU filters: ${this.getGpuFilterEffects().join(", ") || "none"}.`,
+				),
+				{ cause },
+			);
+		}
+	}
+
 	private async renderOutput(timeMs: number): Promise<void> {
 		if (this.hasActiveBlurAnnotations(timeMs)) {
 			const annotationContainerVisible = this.annotationContainer?.visible ?? true;
@@ -2969,7 +3013,7 @@ export class FrameRenderer {
 				this.captionContainer.visible = false;
 			}
 
-			this.app!.render();
+			this.renderScene();
 
 			if (this.annotationContainer) {
 				this.annotationContainer.visible = annotationContainerVisible;
@@ -2983,7 +3027,7 @@ export class FrameRenderer {
 		}
 
 		this.outputCanvasOverride = null;
-		this.app!.render();
+		this.renderScene();
 	}
 
 	private updateLayout(): void {

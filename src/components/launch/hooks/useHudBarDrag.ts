@@ -11,7 +11,9 @@ export function useHudBarDrag({
 	hudContentRef,
 	hudBarRef,
 	recordingWebcamPreviewContainerRef,
+	dragWindow = false,
 }: {
+	dragWindow?: boolean;
 	hudContentRef: RefObject<HTMLDivElement>;
 	hudBarRef: RefObject<HTMLDivElement>;
 	recordingWebcamPreviewContainerRef: RefObject<HTMLDivElement>;
@@ -32,6 +34,7 @@ export function useHudBarDrag({
 		hudHeight: number;
 	} | null>(null);
 	const isHudDraggingRef = useRef(false);
+	const windowDragPointerIdRef = useRef<number | null>(null);
 	const hudDragMoveRafRef = useRef<number | null>(null);
 	const hudDragPendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
@@ -43,7 +46,7 @@ export function useHudBarDrag({
 	}, [recordingHudOffset]);
 
 	const keepHudBarInsideViewport = useCallback(() => {
-		if (isHudDraggingRef.current || !hudBarRef.current) {
+		if (dragWindow || isHudDraggingRef.current || !hudBarRef.current) {
 			return;
 		}
 
@@ -64,7 +67,7 @@ export function useHudBarDrag({
 			hudBarTransformRef.current.style.transform = `translate3d(${nextOffset.x}px, ${nextOffset.y}px, 0)`;
 		}
 		setRecordingHudOffset(nextOffset);
-	}, [hudBarRef]);
+	}, [dragWindow, hudBarRef]);
 
 	useEffect(() => {
 		const resizeObserver =
@@ -93,6 +96,11 @@ export function useHudBarDrag({
 			isHudDraggingRef.current = true;
 			setIsHudDragging(true);
 			window.electronAPI?.hudOverlaySetIgnoreMouse?.(false);
+			if (dragWindow) {
+				windowDragPointerIdRef.current = event.pointerId;
+				window.electronAPI?.hudOverlayDrag?.("start", event.screenX, event.screenY);
+				return;
+			}
 			if (!hudBarRef.current) {
 				return;
 			}
@@ -109,10 +117,14 @@ export function useHudBarDrag({
 				hudHeight: hudRect.height,
 			};
 		},
-		[hudBarRef],
+		[dragWindow, hudBarRef],
 	);
 
 	const handleHudBarPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+		if (windowDragPointerIdRef.current === event.pointerId) {
+			window.electronAPI?.hudOverlayDrag?.("move", event.screenX, event.screenY);
+			return;
+		}
 		const dragState = hudDragStartRef.current;
 		if (!dragState || dragState.pointerId !== event.pointerId) {
 			return;
@@ -159,6 +171,16 @@ export function useHudBarDrag({
 
 	const handleHudBarPointerUp = useCallback(
 		(event: PointerEvent<HTMLDivElement>) => {
+			if (windowDragPointerIdRef.current === event.pointerId) {
+				window.electronAPI?.hudOverlayDrag?.("end", event.screenX, event.screenY);
+				windowDragPointerIdRef.current = null;
+				isHudDraggingRef.current = false;
+				setIsHudDragging(false);
+				if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+					event.currentTarget.releasePointerCapture(event.pointerId);
+				}
+				return;
+			}
 			const dragState = hudDragStartRef.current;
 			if (!dragState || dragState.pointerId !== event.pointerId) {
 				return;
@@ -231,6 +253,10 @@ export function useHudBarDrag({
 		return () => {
 			if (hudDragMoveRafRef.current !== null) {
 				cancelAnimationFrame(hudDragMoveRafRef.current);
+			}
+			if (windowDragPointerIdRef.current !== null) {
+				window.electronAPI?.hudOverlayDrag?.("end", 0, 0);
+				windowDragPointerIdRef.current = null;
 			}
 			hudDragMoveRafRef.current = null;
 			hudDragPendingPointerRef.current = null;

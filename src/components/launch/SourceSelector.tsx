@@ -1,4 +1,4 @@
-import { AppWindowIcon, CaretUpIcon, MonitorIcon } from "@phosphor-icons/react";
+import { AppWindowIcon, CaretUpIcon, MonitorIcon, SelectionIcon } from "@phosphor-icons/react";
 import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface SourceSelectorProps {
 	loading?: boolean;
 	/** Callback when a source is selected */
 	onSourceSelect?: (source: DesktopSource) => void;
+	onSelectRegion?: () => void;
 	/** Callback to fetch sources */
 	onFetchSources?: () => Promise<void>;
 	/** Whether the popover is open */
@@ -46,61 +47,68 @@ export const SourceSelectorContent = ({
 	selectedSource = "Screen",
 	loading = false,
 	onSourceSelect = () => undefined,
+	onSelectRegion,
 }: Pick<
 	SourceSelectorProps,
-	"screenSources" | "windowSources" | "selectedSource" | "loading" | "onSourceSelect"
+	| "screenSources"
+	| "windowSources"
+	| "selectedSource"
+	| "loading"
+	| "onSourceSelect"
+	| "onSelectRegion"
 >) => {
 	const t = useScopedT("launch");
 	const renderSourceItem = (source: DesktopSource, index: number) => {
 		const isSelected = selectedSource === source.name;
 		return (
-			<button
-				key={`${source.id}-${index}`}
-				type="button"
-				className={cn(
-					"source-selector-item group min-h-[46px] w-full rounded-[11px] px-3 py-2.5 text-left font-medium flex items-center justify-start gap-3",
-					isSelected && "source-selector-item-selected",
-				)}
-				onClick={() => onSourceSelect(source)}
-			>
-				<div className="relative flex-shrink-0">
-					{source.thumbnail ? (
-						<img
-							src={source.thumbnail}
-							alt=""
-							className="w-12 h-8 rounded-[8px] object-cover bg-black/50"
-							onError={(e) => {
-								(e.target as HTMLImageElement).style.display = "none";
-							}}
-						/>
-					) : (
-						<div className="source-selector-thumb-fallback w-12 h-8 rounded-[8px] flex items-center justify-center">
-							{source.sourceType === "window" ? (
-								<AppWindowIcon className="w-5 h-5 source-selector-muted" />
-							) : (
-								<MonitorIcon className="w-5 h-5 source-selector-muted" />
-							)}
-						</div>
+			<div key={`${source.id}-${index}`}>
+				<button
+					type="button"
+					className={cn(
+						"source-selector-item group min-h-[46px] w-full rounded-[11px] px-3 py-2.5 text-left font-medium flex items-center justify-start gap-3",
+						isSelected && "source-selector-item-selected",
 					)}
-				</div>
+					onClick={() => onSourceSelect(source)}
+				>
+					<div className="relative flex-shrink-0">
+						{source.thumbnail ? (
+							<img
+								src={source.thumbnail}
+								alt=""
+								className="w-12 h-8 rounded-[8px] object-cover bg-black/50"
+								onError={(e) => {
+									(e.target as HTMLImageElement).style.display = "none";
+								}}
+							/>
+						) : (
+							<div className="source-selector-thumb-fallback w-12 h-8 rounded-[8px] flex items-center justify-center">
+								{source.sourceType === "window" ? (
+									<AppWindowIcon className="w-5 h-5 source-selector-muted" />
+								) : (
+									<MonitorIcon className="w-5 h-5 source-selector-muted" />
+								)}
+							</div>
+						)}
+					</div>
 
-				<div className="flex-1 min-w-0 flex flex-col items-start text-left">
-					<div className="text-sm font-medium source-selector-text w-full">
-						<MarqueeText text={source.windowTitle || source.name} />
+					<div className="flex-1 min-w-0 flex flex-col items-start text-left">
+						<div className="text-sm font-medium source-selector-text w-full">
+							<MarqueeText text={source.windowTitle || source.name} />
+						</div>
+						<div className="text-xs source-selector-subtle truncate w-full text-left">
+							{source.sourceType === "screen"
+								? t("recording.screen")
+								: t("recording.window")}
+						</div>
 					</div>
-					<div className="text-xs source-selector-subtle truncate w-full text-left">
-						{source.sourceType === "screen"
-							? t("recording.screen")
-							: t("recording.window")}
-					</div>
-				</div>
-			</button>
+				</button>
+			</div>
 		);
 	};
 
 	const hasAnySources = screenSources.length > 0 || windowSources.length > 0;
 
-	if (loading && !hasAnySources) {
+	if (loading && !hasAnySources && !onSelectRegion) {
 		return (
 			<div className="flex items-center justify-center py-8">
 				<div className="animate-spin rounded-full h-5 w-5 border-b-2 source-selector-accent-border" />
@@ -110,6 +118,23 @@ export const SourceSelectorContent = ({
 
 	return (
 		<div className="max-h-[320px] overflow-y-auto overflow-x-hidden p-2 source-selector-scroll">
+			{onSelectRegion && (
+				<button
+					type="button"
+					className="source-selector-item mb-2 min-h-[54px] w-full rounded-[11px] px-3 py-2.5 text-left flex items-center gap-3"
+					onClick={() => onSelectRegion()}
+				>
+					<SelectionIcon size={24} className="shrink-0 source-selector-text" />
+					<span className="flex flex-col gap-0.5">
+						<span className="text-sm font-medium source-selector-text">
+							{t("recording.selectArea", "Select area")}
+						</span>
+						<span className="text-xs source-selector-subtle">
+							{t("recording.selectAreaHint", "Drag a rectangle on either monitor")}
+						</span>
+					</span>
+				</button>
+			)}
 			{hasAnySources ? (
 				<>
 					{screenSources.length > 0 ? (
@@ -164,6 +189,7 @@ export const SourceSelector = React.memo(function SourceSelector({
 	selectedSource: propsSelectedSource,
 	loading: propsLoading,
 	onSourceSelect: propsOnSourceSelect,
+	onSelectRegion,
 	onFetchSources: propsOnFetchSources,
 	open: propsOpen,
 	onOpenChange: propsOnOpenChange,
@@ -326,12 +352,13 @@ export const SourceSelector = React.memo(function SourceSelector({
 				className="launch-theme w-80 p-0 source-selector-popover"
 				unstyled
 				align="start"
-				sideOffset={8}
+				sideOffset={24}
 				side="top"
 				alignOffset={-8}
 				avoidCollisions={true}
 				collisionPadding={10}
-				usePortal={false}
+				usePortal
+				data-hud-interactive
 				onMouseEnter={onMouseEnter}
 			>
 				<SourceSelectorContent
@@ -340,6 +367,7 @@ export const SourceSelector = React.memo(function SourceSelector({
 					selectedSource={selectedSource}
 					loading={loading}
 					onSourceSelect={onSourceSelect}
+					onSelectRegion={onSelectRegion}
 				/>
 			</PopoverContent>
 		</Popover>

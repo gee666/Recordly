@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { app, ipcMain } from "electron";
 import { hasAppSetting, readAppSettingsStore, writeAppSettingsStore } from "../../appSettingsStore";
 import { hideCursor } from "../../cursorHider";
+import { showHudAutoHideCountdownHint } from "../../hudAutoHide";
 import { closeCountdownWindow, createCountdownWindow, getCountdownWindow } from "../../windows";
 import { COUNTDOWN_SETTINGS_FILE, RECORDINGS_SETTINGS_FILE, SHORTCUTS_FILE } from "../constants";
 import {
@@ -195,6 +196,7 @@ export function registerSettingsHandlers() {
 		setCountdownRemaining(seconds);
 
 		const countdownWin = createCountdownWindow();
+		showHudAutoHideCountdownHint();
 
 		if (countdownWin.webContents.isLoadingMainFrame()) {
 			await new Promise<void>((resolve) => {

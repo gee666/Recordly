@@ -26,6 +26,11 @@ import {
 	killWindowsCaptureProcess,
 	registerIpcHandlers,
 } from "./ipc/handlers";
+import {
+	configureHudAutoHide,
+	getActiveStopShortcut,
+	setHudAutoHideRecording,
+} from "./hudAutoHide";
 import { ensureMediaServer } from "./mediaServer";
 import { hardenWebContentsNavigation, shouldHardenWebContentsType } from "./navigationPolicy";
 import { shouldGrantDisplayCapture, shouldGrantMediaPermission } from "./permissionPolicy";
@@ -703,8 +708,15 @@ ipcMain.handle("check-for-app-updates", async () => {
 	return { success: true, logPath: getUpdaterLogPath() };
 });
 
+function requestStopRecording() {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send("stop-recording-from-tray");
+	}
+}
+
 function updateTrayMenu(recording: boolean = false) {
 	if (!tray) return;
+	const stopShortcut = getActiveStopShortcut();
 	const trayIcon = recording ? getRecordingTrayIcon() : getDefaultTrayIcon();
 	const trayToolTip = recording ? `Recording: ${selectedSourceName}` : "Recordly";
 	const menuTemplate = recording
@@ -718,12 +730,8 @@ function updateTrayMenu(recording: boolean = false) {
 					},
 				},
 				{
-					label: "Stop Recording",
-					click: () => {
-						if (mainWindow && !mainWindow.isDestroyed()) {
-							mainWindow.webContents.send("stop-recording-from-tray");
-						}
-					},
+					label: stopShortcut ? `Stop Recording (${stopShortcut})` : "Stop Recording",
+					click: requestStopRecording,
 				},
 			]
 		: [
@@ -866,6 +874,7 @@ function createSourceSelectorWindowWrapper() {
 // explicitly with Cmd + Q.
 app.on("before-quit", () => {
 	isAppQuitting = true;
+	setHudAutoHideRecording(false);
 	killWindowsCaptureProcess();
 	showCursor();
 	cleanupNativeVideoExportSessions();
@@ -981,6 +990,11 @@ app.whenReady().then(async () => {
 		updateTrayMenu();
 	}
 	setupApplicationMenu();
+	configureHudAutoHide({
+		stopRecording: requestStopRecording,
+		showHud: showHudOverlayFromTray,
+		trayAvailable: shouldUseTray(),
+	});
 	await Promise.all([
 		ensureRecordingsDir(),
 		!VITE_DEV_SERVER_URL
@@ -1004,6 +1018,7 @@ app.whenReady().then(async () => {
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;
 			setHudOverlayRecordingActive(recording);
+			setHudAutoHideRecording(recording);
 			if (shouldUseTray()) {
 				if (!tray) createTray();
 				updateTrayMenu(recording);

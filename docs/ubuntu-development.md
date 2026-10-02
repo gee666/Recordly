@@ -26,6 +26,12 @@ changes are needed. Rebuild with `npx vite build` after changing repo files.
 - The blue, click-through outline remains visible during recording and pause. Its
   strips sit outside the recorded pixels (an edge at the desktop boundary can be
   off-screen).
+- The recording controls are hidden while recording when they sit inside the
+  captured screen or area (window capture and other monitors are unaffected).
+  A hint appears outside the recorded pixels (during the countdown when there is
+  no such place). Stop with **Ctrl+Alt+Shift+S** (global, only registered while
+  the controls are hidden) or with the Recordly tray icon: **Stop Recording**, or
+  **Show Controls** to bring the controls back for the rest of the recording.
 - Source changes are locked while recording starts. Changing the display layout
   invalidates the selection; select the area again.
 - The camera icon toggles recording on/off. The adjacent arrow opens camera

@@ -7,7 +7,6 @@ import type {
 	CaptionCue,
 	ClipRegion,
 	CursorTelemetryPoint,
-	SpeedRegion,
 	TrimRegion,
 	ZoomFocus,
 	ZoomRegion,
@@ -54,8 +53,10 @@ interface UseTimelineEditorRuntimeParams {
 	onAnnotationDelete?: (id: string) => void;
 	selectedAnnotationId?: string | null;
 	onSelectAnnotation?: (id: string | null) => void;
-	speedRegions: SpeedRegion[];
-	onSpeedSpanChange?: (id: string, span: Span) => void;
+	onSpeedSectionSpanChange?: (clipId: string, span: Span) => void;
+	onSpeedSectionDelete?: (clipId: string) => void;
+	selectedSpeedSectionId?: string | null;
+	onSelectSpeedSection?: (clipId: string | null) => void;
 	audioRegions: AudioRegion[];
 	onAudioAdded?: (span: Span, audioPath: string, trackIndex?: number) => void;
 	onAudioSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
@@ -105,8 +106,10 @@ export function useTimelineEditorRuntime({
 	onAnnotationDelete,
 	selectedAnnotationId,
 	onSelectAnnotation,
-	speedRegions,
-	onSpeedSpanChange,
+	onSpeedSectionSpanChange,
+	onSpeedSectionDelete,
+	selectedSpeedSectionId,
+	onSelectSpeedSection,
 	audioRegions,
 	onAudioAdded,
 	onAudioSpanChange,
@@ -139,12 +142,14 @@ export function useTimelineEditorRuntime({
 		deleteSelectedAnnotation,
 		deleteSelectedAudio,
 		deleteSelectedCaption,
+		deleteSelectedSpeedSection,
 		clearSelectedBlocks,
 		handleSelectZoom,
 		handleSelectClip,
 		handleSelectAnnotation,
 		handleSelectAudio,
 		handleSelectCaption,
+		handleSelectSpeedSection,
 		cycleAnnotationsAtCurrentTime,
 	} = useTimelineSelection({
 		totalMs,
@@ -158,16 +163,19 @@ export function useTimelineEditorRuntime({
 		selectedAnnotationId,
 		selectedAudioId,
 		selectedCaptionId,
+		selectedSpeedSectionId,
 		onZoomDelete,
 		onClipDelete,
 		onAnnotationDelete,
 		onAudioDelete,
 		onCaptionDelete,
+		onSpeedSectionDelete,
 		onSelectZoom,
 		onSelectClip,
 		onSelectAnnotation,
 		onSelectAudio,
 		onSelectCaption,
+		onSelectSpeedSection,
 	});
 
 	useTimelineNormalization({
@@ -175,11 +183,9 @@ export function useTimelineEditorRuntime({
 		safeMinDurationMs,
 		zoomRegions,
 		trimRegions,
-		speedRegions,
 		audioRegions,
 		onZoomSpanChange,
 		onTrimSpanChange,
-		onSpeedSpanChange,
 		onAudioSpanChange,
 	});
 
@@ -195,14 +201,13 @@ export function useTimelineEditorRuntime({
 		trimRegions,
 		clipRegions,
 		annotationRegions,
-		speedRegions,
 		audioRegions,
 		captionCues,
 		onZoomSpanChange,
 		onTrimSpanChange,
 		onClipSpanChange,
 		onAnnotationSpanChange,
-		onSpeedSpanChange,
+		onSpeedSectionSpanChange,
 		onAudioSpanChange,
 		onCaptionSpanChange,
 	});
@@ -283,6 +288,7 @@ export function useTimelineEditorRuntime({
 		selectedAnnotationId,
 		selectedAudioId,
 		selectedCaptionId,
+		selectedSpeedSectionId,
 		selectAllBlocksActive,
 		addKeyframe,
 		handleAddZoom,
@@ -295,6 +301,7 @@ export function useTimelineEditorRuntime({
 		deleteSelectedAnnotation,
 		deleteSelectedAudio,
 		deleteSelectedCaption,
+		deleteSelectedSpeedSection,
 		cycleAnnotationsAtCurrentTime,
 	});
 
@@ -333,6 +340,7 @@ export function useTimelineEditorRuntime({
 		handleSelectAnnotation,
 		handleSelectAudio,
 		handleSelectCaption,
+		handleSelectSpeedSection,
 		hasOverlap,
 		resizesIntoNeighbour,
 		timelineItems,

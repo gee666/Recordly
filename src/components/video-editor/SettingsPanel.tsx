@@ -36,7 +36,7 @@ import { SUPPORTED_LOCALES } from "../../i18n/config";
 import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import CaptionListPanel from "./CaptionListPanel";
 import type { CaptionRetimeSpan } from "./captionOps";
-import { ClipSpeedPresets } from "./ClipSpeedPresets";
+import { ClipSpeedControls } from "./ClipSpeedControls";
 import {
 	CURSOR_MOTION_PRESETS,
 	type CursorMotionPresetId,
@@ -92,7 +92,6 @@ import {
 } from "./types";
 import { fromCursorSwaySliderValue, toCursorSwaySliderValue } from "./videoPlayback/cursorSway";
 import { isZeroPadding } from "./videoPlayback/layoutUtils";
-import { getPreviewPlaybackRateRange } from "./videoPlayback/playbackRate";
 import {
 	cursorSetAssets,
 	getCursorStyleSizeMultiplier,
@@ -529,6 +528,10 @@ interface SettingsPanelProps {
 	onClipSpeedChange?: (speed: number) => void;
 	onClipMutedChange?: (muted: boolean) => void;
 	onClipDelete?: (id: string) => void;
+	selectedSpeedSectionId?: string | null;
+	selectedSpeedSectionSpeed?: number | null;
+	onSpeedSectionSpeedChange?: (speed: number) => void;
+	onSpeedSectionDelete?: (clipId: string) => void;
 	selectedAudioId?: string | null;
 	selectedAudioVolume?: number | null;
 	selectedAudioNormalize?: boolean | null;
@@ -986,6 +989,10 @@ export function SettingsPanel({
 	onClipSpeedChange,
 	onClipMutedChange,
 	onClipDelete,
+	selectedSpeedSectionId,
+	selectedSpeedSectionSpeed,
+	onSpeedSectionSpeedChange,
+	onSpeedSectionDelete,
 	selectedAudioId,
 	selectedAudioVolume,
 	selectedAudioNormalize,
@@ -1098,7 +1105,6 @@ export function SettingsPanel({
 	const { preference: themePreference, setPreference: setThemePreference } = useTheme();
 	const isBackgroundPanel = panelMode === "background";
 	const initialEditorPreferences = useMemo(() => loadEditorPreferences(), []);
-	const clipSpeedRange = useMemo(getPreviewPlaybackRateRange, []);
 	const [builtInWallpapers, setBuiltInWallpapers] =
 		useState<BuiltInWallpaper[]>(BUILT_IN_WALLPAPERS);
 	const [wallpaperPreviewPaths, setWallpaperPreviewPaths] = useState<string[]>([]);
@@ -3029,28 +3035,10 @@ export function SettingsPanel({
 		const clipSectionContent = (
 			<section className="flex flex-col gap-3">
 				<SectionLabel>{tSettings("clip.title", "Clip")}</SectionLabel>
-				<SliderControl
-					label={tSettings("speed.label", "Speed")}
-					value={Math.min(clipSpeedRange.max, Math.max(clipSpeedRange.min, selectedClipSpeed ?? 1))}
-					defaultValue={1}
-					min={clipSpeedRange.min}
-					max={clipSpeedRange.max}
-					step={0.25}
-					onChange={(value) => onClipSpeedChange?.(value)}
-					formatValue={(value) => `${value}×`}
-					parseInput={(text) => Number.parseFloat(text)}
-				/>
-				<ClipSpeedPresets
+				<ClipSpeedControls
 					speed={selectedClipSpeed ?? null}
-					range={clipSpeedRange}
-					onSelect={(speed) => onClipSpeedChange?.(speed)}
+					onChange={(speed) => onClipSpeedChange?.(speed)}
 				/>
-				{selectedClipSpeed != null &&
-					(selectedClipSpeed < clipSpeedRange.min || selectedClipSpeed > clipSpeedRange.max) && (
-						<p className="text-[11px] text-muted-foreground" role="status">
-							{selectedClipSpeed}× — {tSettings("speed.unsupported", "Not supported for preview on this device")}
-						</p>
-					)}
 				<label className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-2">
 					<span className="text-[11px] text-muted-foreground">
 						{tSettings("clip.mute", "Mute clip")}
@@ -3067,6 +3055,16 @@ export function SettingsPanel({
 						{tSettings("clip.resetAudioSettings", "Reset audio settings")}
 					</Button>
 				)}
+			</section>
+		);
+
+		const speedSectionContent = (
+			<section className="flex flex-col gap-3">
+				<SectionLabel>{tSettings("speed.playbackSpeed", "Playback Speed")}</SectionLabel>
+				<ClipSpeedControls
+					speed={selectedSpeedSectionSpeed ?? null}
+					onChange={(speed) => onSpeedSectionSpeedChange?.(speed)}
+				/>
 			</section>
 		);
 
@@ -3107,6 +3105,8 @@ export function SettingsPanel({
 				return zoomItemSectionContent;
 			case "clip":
 				return clipSectionContent;
+			case "speed":
+				return speedSectionContent;
 			case "audio":
 				return audioSectionContent;
 			case "frame":
@@ -3665,6 +3665,7 @@ export function SettingsPanel({
 					"flex-shrink-0 border-t border-foreground/10 bg-editor-panel p-4 pt-3",
 					(() => {
 						if (activeEffectSection === "clip" && selectedClipId) return false;
+						if (activeEffectSection === "speed" && selectedSpeedSectionId) return false;
 						if (activeEffectSection === "zoom" && selectedZoomId) return false;
 						if (activeEffectSection === "audio" && selectedAudioId) return false;
 						if (selectedAnnotationId) return false; // Annotation editor handles its own but let's see
@@ -3683,6 +3684,17 @@ export function SettingsPanel({
 					>
 						<Trash2 className="h-3 w-3" />
 						{tSettings("clip.delete", "Delete Clip")}
+					</Button>
+				)}
+				{activeEffectSection === "speed" && selectedSpeedSectionId && (
+					<Button
+						onClick={() => onSpeedSectionDelete?.(selectedSpeedSectionId)}
+						variant="destructive"
+						size="sm"
+						className="h-8 w-full gap-2 border border-red-500/20 bg-red-500/10 text-xs text-red-400 transition-all hover:border-red-500/30 hover:bg-red-500/20"
+					>
+						<Trash2 className="h-3 w-3" />
+						{tSettings("speed.deleteRegion", "Delete Speed Region")}
 					</Button>
 				)}
 				{activeEffectSection === "zoom" && selectedZoomId && (

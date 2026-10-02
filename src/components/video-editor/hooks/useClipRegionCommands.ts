@@ -26,6 +26,8 @@ interface UseClipRegionCommandsParams {
 	setAudioRegions: Dispatch<SetStateAction<AudioRegion[]>>;
 	selectedClipId: string | null;
 	setSelectedClipId: Dispatch<SetStateAction<string | null>>;
+	selectedSpeedSectionId: string | null;
+	setSelectedSpeedSectionId: Dispatch<SetStateAction<string | null>>;
 	setSelectedZoomId: Dispatch<SetStateAction<string | null>>;
 	setSelectedAnnotationId: Dispatch<SetStateAction<string | null>>;
 	setSelectedAudioId: Dispatch<SetStateAction<string | null>>;
@@ -44,6 +46,8 @@ export function useClipRegionCommands({
 	setAudioRegions,
 	selectedClipId,
 	setSelectedClipId,
+	selectedSpeedSectionId,
+	setSelectedSpeedSectionId,
 	setSelectedZoomId,
 	setSelectedAnnotationId,
 	setSelectedAudioId,
@@ -57,6 +61,7 @@ export function useClipRegionCommands({
 			setSelectedClipId(id);
 			if (id) {
 				setActiveEffectSection("clip");
+				setSelectedSpeedSectionId(null);
 				setSelectedZoomId(null);
 				setSelectedAnnotationId(null);
 				setSelectedAudioId(null);
@@ -71,22 +76,49 @@ export function useClipRegionCommands({
 			setSelectedAudioId,
 			setSelectedCaptionId,
 			setSelectedClipId,
+			setSelectedSpeedSectionId,
 			setSelectedZoomId,
 		],
 	);
 
-	const { handleClipSpeedChange, handleSpeedUpSection, handleSpeedSectionRoll } =
-		useClipSpeedCommands({
-			clipRegions,
-			setClipRegions,
-			setZoomRegions,
-			setAnnotationRegions,
-			setAudioRegions,
-			selectedClipId,
-			selectClip: handleSelectClip,
-			nextClipIdRef,
-			t,
-		});
+	const handleSelectSpeedSection = useCallback(
+		(clipId: string | null) => {
+			setSelectedSpeedSectionId(clipId);
+			if (clipId) {
+				setActiveEffectSection("speed");
+				setSelectedClipId(null);
+				setSelectedZoomId(null);
+				setSelectedAnnotationId(null);
+				setSelectedAudioId(null);
+				setSelectedCaptionId(null);
+			} else {
+				setActiveEffectSection((section) => (section === "speed" ? "scene" : section));
+			}
+		},
+		[
+			setActiveEffectSection,
+			setSelectedAnnotationId,
+			setSelectedAudioId,
+			setSelectedCaptionId,
+			setSelectedClipId,
+			setSelectedSpeedSectionId,
+			setSelectedZoomId,
+		],
+	);
+
+	const speedCommands = useClipSpeedCommands({
+		clipRegions,
+		setClipRegions,
+		setZoomRegions,
+		setAnnotationRegions,
+		setAudioRegions,
+		selectedClipId,
+		selectedSpeedSectionId,
+		selectSpeedSection: handleSelectSpeedSection,
+		nextClipIdRef,
+		t,
+	});
+	const { handleSpeedSectionRoll } = speedCommands;
 
 	const handleClipSplit = useCallback(
 		(splitMs: number) => {
@@ -175,8 +207,8 @@ export function useClipRegionCommands({
 		handleSelectClip,
 		handleClipSplit,
 		handleClipSpanChange,
-		handleClipSpeedChange,
-		handleSpeedUpSection,
+		...speedCommands,
+		handleSelectSpeedSection,
 		handleClipMutedChange,
 		handleClipShowSourceAudioChange,
 		handleClipDelete,

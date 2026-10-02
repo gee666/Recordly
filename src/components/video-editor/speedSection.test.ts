@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findSpeedSectionRoll, planSpeedSectionInsert, planSpeedSectionRoll } from "./speedSection";
+import {
+	findSpeedSectionRoll,
+	planSpeedSectionInsert,
+	planSpeedSectionRemove,
+	planSpeedSectionRoll,
+	planSpeedSectionSlide,
+} from "./speedSection";
 import type { ClipRegion } from "./types";
 
 function createIds() {
@@ -121,5 +127,55 @@ describe("speed section edge rolls", () => {
 		expect(findSpeedSectionRoll(clips, "clip-12", { start: 4_000, end: 8_000 })).toBeNull();
 		const isolated: ClipRegion[] = [{ id: "fast", startMs: 0, endMs: 2_000, speed: 2 }];
 		expect(findSpeedSectionRoll(isolated, "fast", { start: 0, end: 3_000 })).toBeNull();
+	});
+});
+
+describe("moving and removing speed sections", () => {
+	const plan = insertAt(recording, 3_000);
+	if (plan.kind !== "inserted") throw new Error(`unexpected ${plan.kind}`);
+	const clips = plan.clipRegions;
+
+	it("slides the section along the footage, keeping how much it covers", () => {
+		const result = planSpeedSectionSlide(clips, "clip-11", 5_000, 100);
+
+		expect(result?.clipRegions).toEqual([
+			{ id: "clip-10", startMs: 0, endMs: 5_000, speed: 1 },
+			{ id: "clip-11", startMs: 5_000, endMs: 7_000, sourceStartMs: 5_000, speed: 2 },
+			{ id: "clip-12", startMs: 7_000, endMs: 8_000, sourceStartMs: 9_000, speed: 1 },
+		]);
+	});
+
+	it("stops the slide before a neighbour disappears", () => {
+		const result = planSpeedSectionSlide(clips, "clip-11", 0, 100);
+		expect(result?.clipRegions[0]).toEqual({ id: "clip-10", startMs: 0, endMs: 100, speed: 1 });
+	});
+
+	it("restores the original footage when the section is removed", () => {
+		const result = planSpeedSectionRemove(clips, "clip-11");
+
+		expect(result?.clipRegions).toEqual([
+			{ id: "clip-10", startMs: 0, endMs: 10_000, sourceStartMs: 0, speed: 1 },
+		]);
+		expect(result?.retime(4_000)).toBe(5_000);
+		expect(result?.retime(6_000)).toBe(8_000);
+	});
+
+	it("keeps neighbours with different audio settings as separate clips", () => {
+		const muted = clips.map((clip) =>
+			clip.id === "clip-12" ? { ...clip, muted: true } : clip,
+		);
+		const result = planSpeedSectionRemove(muted, "clip-11");
+
+		expect(result?.clipRegions).toEqual([
+			{ id: "clip-10", startMs: 0, endMs: 7_000, sourceStartMs: 0, speed: 1 },
+			{
+				id: "clip-12",
+				startMs: 7_000,
+				endMs: 10_000,
+				sourceStartMs: 7_000,
+				speed: 1,
+				muted: true,
+			},
+		]);
 	});
 });

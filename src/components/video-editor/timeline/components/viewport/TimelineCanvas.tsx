@@ -19,6 +19,7 @@ import {
 	CAPTION_ROW_ID,
 	CLIP_ROW_ID,
 	SOURCE_AUDIO_ROW_ID,
+	SPEED_ROW_ID,
 	ZOOM_ROW_ID,
 } from "../../core/constants";
 import {
@@ -26,6 +27,7 @@ import {
 	getAnnotationTrackRowId,
 	getAudioTrackIndex,
 	getAudioTrackRowId,
+	getSpeedSectionClipId,
 	isAnnotationTrackRowId,
 	isAudioTrackRowId,
 } from "../../core/rows";
@@ -60,6 +62,7 @@ interface TimelineCanvasProps {
 	onSelectAnnotation?: (id: string | null) => void;
 	onSelectAudio?: (id: string | null) => void;
 	onSelectCaption?: (id: string | null) => void;
+	onSelectSpeedSection?: (clipId: string | null) => void;
 	onAddZoomAtMs?: (startMs: number) => void;
 	onAddCaptionAtMs?: (startMs: number) => void;
 	canPlaceCaptionAtMs?: (startMs: number) => boolean;
@@ -71,6 +74,7 @@ interface TimelineCanvasProps {
 	selectedAnnotationId?: string | null;
 	selectedAudioId?: string | null;
 	selectedCaptionId?: string | null;
+	selectedSpeedSectionId?: string | null;
 	selectAllBlocksActive?: boolean;
 	onClearBlockSelection?: () => void;
 	keyframes?: { id: string; time: number }[];
@@ -367,11 +371,13 @@ interface TimelineCanvasRowsProps {
 	selectedAnnotationId?: string | null;
 	selectedAudioId?: string | null;
 	selectedCaptionId?: string | null;
+	selectedSpeedSectionId?: string | null;
 	onSelectZoom?: (id: string | null) => void;
 	onSelectClip?: (id: string | null) => void;
 	onSelectAnnotation?: (id: string | null) => void;
 	onSelectAudio?: (id: string | null) => void;
 	onSelectCaption?: (id: string | null) => void;
+	onSelectSpeedSection?: (clipId: string | null) => void;
 	sourceAudioTracks?: SourceAudioTrackWithPeaks[];
 	getSourceAudioTrackSettingsForClip?: (clipId: string | null) => SourceAudioTrackSettings;
 	showSourceAudioTrack?: boolean;
@@ -446,11 +452,13 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 	selectedAnnotationId,
 	selectedAudioId,
 	selectedCaptionId,
+	selectedSpeedSectionId,
 	onSelectZoom,
 	onSelectClip,
 	onSelectAnnotation,
 	onSelectAudio,
 	onSelectCaption,
+	onSelectSpeedSection,
 	sourceAudioTracks = [],
 	getSourceAudioTrackSettingsForClip,
 	showSourceAudioTrack = false,
@@ -478,62 +486,69 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 	onCaptionRowClick,
 }: TimelineCanvasRowsProps) {
 	const hiddenIds = useMemo(() => new Set(liveHiddenItemIds ?? []), [liveHiddenItemIds]);
-	const { clipItems, zoomItems, captionItems, annotationRows, audioRows } = useMemo(() => {
-		const nextClipItems: TimelineRenderItem[] = [];
-		const nextZoomItems: TimelineRenderItem[] = [];
-		const nextCaptionItems: TimelineRenderItem[] = [];
-		const annotationBuckets = new Map<number, TimelineRenderItem[]>();
-		const audioBuckets = new Map<number, TimelineRenderItem[]>();
+	const { clipItems, speedItems, zoomItems, captionItems, annotationRows, audioRows } =
+		useMemo(() => {
+			const nextClipItems: TimelineRenderItem[] = [];
+			const nextSpeedItems: TimelineRenderItem[] = [];
+			const nextZoomItems: TimelineRenderItem[] = [];
+			const nextCaptionItems: TimelineRenderItem[] = [];
+			const annotationBuckets = new Map<number, TimelineRenderItem[]>();
+			const audioBuckets = new Map<number, TimelineRenderItem[]>();
 
-		for (const item of items) {
-			if (item.rowId === CLIP_ROW_ID) {
-				nextClipItems.push(item);
-				continue;
+			for (const item of items) {
+				if (item.rowId === CLIP_ROW_ID) {
+					nextClipItems.push(item);
+					continue;
+				}
+				if (item.rowId === SPEED_ROW_ID) {
+					nextSpeedItems.push(item);
+					continue;
+				}
+				if (item.rowId === ZOOM_ROW_ID) {
+					nextZoomItems.push(item);
+					continue;
+				}
+				if (item.rowId === CAPTION_ROW_ID) {
+					nextCaptionItems.push(item);
+					continue;
+				}
+				if (isAnnotationTrackRowId(item.rowId)) {
+					const trackIndex = getAnnotationTrackIndex(item.rowId);
+					const bucket = annotationBuckets.get(trackIndex);
+					if (bucket) bucket.push(item);
+					else annotationBuckets.set(trackIndex, [item]);
+					continue;
+				}
+				if (isAudioTrackRowId(item.rowId)) {
+					const trackIndex = getAudioTrackIndex(item.rowId);
+					const bucket = audioBuckets.get(trackIndex);
+					if (bucket) bucket.push(item);
+					else audioBuckets.set(trackIndex, [item]);
+				}
 			}
-			if (item.rowId === ZOOM_ROW_ID) {
-				nextZoomItems.push(item);
-				continue;
-			}
-			if (item.rowId === CAPTION_ROW_ID) {
-				nextCaptionItems.push(item);
-				continue;
-			}
-			if (isAnnotationTrackRowId(item.rowId)) {
-				const trackIndex = getAnnotationTrackIndex(item.rowId);
-				const bucket = annotationBuckets.get(trackIndex);
-				if (bucket) bucket.push(item);
-				else annotationBuckets.set(trackIndex, [item]);
-				continue;
-			}
-			if (isAudioTrackRowId(item.rowId)) {
-				const trackIndex = getAudioTrackIndex(item.rowId);
-				const bucket = audioBuckets.get(trackIndex);
-				if (bucket) bucket.push(item);
-				else audioBuckets.set(trackIndex, [item]);
-			}
-		}
 
-		const annotationRowsSorted = Array.from(annotationBuckets.entries())
-			.sort(([left], [right]) => left - right)
-			.map(([trackIndex, rowItems]) => ({
-				rowId: getAnnotationTrackRowId(trackIndex),
-				items: rowItems,
-			}));
-		const audioRowsSorted = Array.from(audioBuckets.entries())
-			.sort(([left], [right]) => left - right)
-			.map(([trackIndex, rowItems]) => ({
-				rowId: getAudioTrackRowId(trackIndex),
-				items: rowItems,
-			}));
+			const annotationRowsSorted = Array.from(annotationBuckets.entries())
+				.sort(([left], [right]) => left - right)
+				.map(([trackIndex, rowItems]) => ({
+					rowId: getAnnotationTrackRowId(trackIndex),
+					items: rowItems,
+				}));
+			const audioRowsSorted = Array.from(audioBuckets.entries())
+				.sort(([left], [right]) => left - right)
+				.map(([trackIndex, rowItems]) => ({
+					rowId: getAudioTrackRowId(trackIndex),
+					items: rowItems,
+				}));
 
-		return {
-			clipItems: nextClipItems,
-			zoomItems: nextZoomItems,
-			captionItems: nextCaptionItems,
-			annotationRows: annotationRowsSorted,
-			audioRows: audioRowsSorted,
-		};
-	}, [items]);
+			return {
+				clipItems: nextClipItems,
+				speedItems: nextSpeedItems,
+				zoomItems: nextZoomItems,
+				captionItems: nextCaptionItems,
+				annotationRows: annotationRowsSorted,
+				audioRows: audioRowsSorted,
+			};
+		}, [items]);
 
 	return (
 		<>
@@ -586,6 +601,27 @@ const TimelineCanvasRows = memo(function TimelineCanvasRows({
 					</Row>
 				))}
 
+			{speedItems.length > 0 && (
+				<Row id={SPEED_ROW_ID}>
+					{speedItems.map((item) => {
+						const clipId = getSpeedSectionClipId(item.id);
+						return (
+							<Item
+								id={item.id}
+								key={item.id}
+								rowId={item.rowId}
+								span={item.span}
+								isSelected={clipId !== null && clipId === selectedSpeedSectionId}
+								onSelect={() => onSelectSpeedSection?.(clipId)}
+								variant="speed"
+								speedValue={item.speedValue}
+							>
+								{item.label}
+							</Item>
+						);
+					})}
+				</Row>
+			)}
 			<Row
 				id={ZOOM_ROW_ID}
 				isEmpty={zoomItems.length === 0}
@@ -763,11 +799,13 @@ export default function TimelineCanvas({
 	onSelectAnnotation,
 	onSelectAudio,
 	onSelectCaption,
+	onSelectSpeedSection,
 	selectedZoomId,
 	selectedClipId,
 	selectedAnnotationId,
 	selectedAudioId,
 	selectedCaptionId,
+	selectedSpeedSectionId,
 	selectAllBlocksActive = false,
 	onClearBlockSelection,
 	keyframes = [],
@@ -932,7 +970,9 @@ export default function TimelineCanvas({
 		const annotationRowIds = new Set<string>();
 		const audioRowIds = new Set<string>();
 		let hasCaptionRow = false;
+		let hasSpeedRow = false;
 		for (const item of items) {
+			if (item.rowId === SPEED_ROW_ID) hasSpeedRow = true;
 			if (isAnnotationTrackRowId(item.rowId)) annotationRowIds.add(item.rowId);
 			if (isAudioTrackRowId(item.rowId)) audioRowIds.add(item.rowId);
 			if (item.rowId === CAPTION_ROW_ID) hasCaptionRow = true;
@@ -942,7 +982,10 @@ export default function TimelineCanvas({
 		// exists), so count it whenever captionsEnabled — not only when a caption item is
 		// present — or the min-height/stretch math undersizes the empty lane.
 		const captionRows = hasCaptionRow || captionsEnabled ? 1 : 0;
-		return 2 + sourceAudioRows + annotationRowIds.size + audioRowIds.size + captionRows;
+		const speedRows = hasSpeedRow ? 1 : 0;
+		return (
+			2 + speedRows + sourceAudioRows + annotationRowIds.size + audioRowIds.size + captionRows
+		);
 	}, [items, showSourceAudioTrack, sourceAudioTracks.length, captionsEnabled]);
 	const timelineRowsMinHeightPx = getTimelineRowsMinHeightPx(timelineRowCount);
 	const timelineContentMinHeightPx = getTimelineContentMinHeightPx(timelineRowCount);
@@ -1040,11 +1083,13 @@ export default function TimelineCanvas({
 					selectedAnnotationId={selectedAnnotationId}
 					selectedAudioId={selectedAudioId}
 					selectedCaptionId={selectedCaptionId}
+					selectedSpeedSectionId={selectedSpeedSectionId}
 					onSelectZoom={onSelectZoom}
 					onSelectClip={onSelectClip}
 					onSelectAnnotation={onSelectAnnotation}
 					onSelectAudio={onSelectAudio}
 					onSelectCaption={onSelectCaption}
+					onSelectSpeedSection={onSelectSpeedSection}
 					sourceAudioTracks={sourceAudioTracks}
 					getSourceAudioTrackSettingsForClip={getSourceAudioTrackSettingsForClip}
 					showSourceAudioTrack={showSourceAudioTrack}

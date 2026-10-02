@@ -14,7 +14,6 @@ import type {
 	CaptionCue,
 	ClipRegion,
 	CursorTelemetryPoint,
-	SpeedRegion,
 	TrimRegion,
 	ZoomFocus,
 	ZoomRegion,
@@ -62,8 +61,10 @@ export interface TimelineEditorProps {
 	onAnnotationDelete?: (id: string) => void;
 	selectedAnnotationId?: string | null;
 	onSelectAnnotation?: (id: string | null) => void;
-	speedRegions?: SpeedRegion[];
-	onSpeedSpanChange?: (id: string, span: Span) => void;
+	onSpeedSectionSpanChange?: (clipId: string, span: Span) => void;
+	onSpeedSectionDelete?: (clipId: string) => void;
+	selectedSpeedSectionId?: string | null;
+	onSelectSpeedSection?: (clipId: string | null) => void;
 	audioRegions?: AudioRegion[];
 	onAudioAdded?: (span: Span, audioPath: string, trackIndex?: number) => void;
 	onAudioSpanChange?: (id: string, span: Span, trackIndex?: number) => void;
@@ -147,8 +148,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			onAnnotationDelete,
 			selectedAnnotationId,
 			onSelectAnnotation,
-			speedRegions = [],
-			onSpeedSpanChange,
+			onSpeedSectionSpanChange,
+			onSpeedSectionDelete,
+			selectedSpeedSectionId,
+			onSelectSpeedSection,
 			audioRegions = [],
 			onAudioAdded,
 			onAudioSpanChange,
@@ -345,6 +348,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			handleSelectAnnotation,
 			handleSelectAudio,
 			handleSelectCaption,
+			handleSelectSpeedSection,
 			hasOverlap,
 			resizesIntoNeighbour,
 			timelineItems,
@@ -388,8 +392,10 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			onAnnotationDelete,
 			selectedAnnotationId,
 			onSelectAnnotation,
-			speedRegions,
-			onSpeedSpanChange,
+			onSpeedSectionSpanChange,
+			onSpeedSectionDelete,
+			selectedSpeedSectionId,
+			onSelectSpeedSection,
 			audioRegions,
 			onAudioAdded,
 			onAudioSpanChange,
@@ -502,11 +508,13 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 							onSelectAnnotation={handleSelectAnnotation}
 							onSelectAudio={handleSelectAudio}
 							onSelectCaption={handleSelectCaption}
+							onSelectSpeedSection={handleSelectSpeedSection}
 							selectedZoomId={selectedZoomId}
 							selectedClipId={selectedClipId}
 							selectedAnnotationId={selectedAnnotationId}
 							selectedAudioId={selectedAudioId}
 							selectedCaptionId={selectedCaptionId}
+							selectedSpeedSectionId={selectedSpeedSectionId}
 							selectAllBlocksActive={selectAllBlocksActive}
 							onClearBlockSelection={clearSelectedBlocks}
 							keyframes={keyframes}

@@ -1,7 +1,6 @@
 import {
 	FastForward,
 	FilmSlate as Film,
-	Gauge,
 	ChatCircle as MessageSquare,
 	MusicNotes as Music,
 	MouseLeftClickIcon as PhMouseLeftClick,
@@ -135,9 +134,7 @@ export default function Item({
 		: isTrim
 			? glassStyles.glassRed
 			: isClip
-				? clipSpeedLabel
-					? glassStyles.glassAmber
-					: glassStyles.glassCyan
+				? glassStyles.glassCyan
 				: isSpeed
 					? glassStyles.glassAmber
 					: isAudio
@@ -238,11 +235,7 @@ export default function Item({
 								</>
 							) : isClip ? (
 								<>
-									{clipSpeedLabel ? (
-										<FastForward className="w-3.5 h-3.5 shrink-0" />
-									) : (
-										<Film className="w-3.5 h-3.5 shrink-0" />
-									)}
+									<Film className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
 										Clip
 									</span>
@@ -254,7 +247,7 @@ export default function Item({
 								</>
 							) : isSpeed ? (
 								<>
-									<Gauge className="w-3.5 h-3.5 shrink-0" />
+									<FastForward className="w-3.5 h-3.5 shrink-0" />
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
 										{speedValue !== undefined ? `${speedValue}×` : "Speed"}
 									</span>

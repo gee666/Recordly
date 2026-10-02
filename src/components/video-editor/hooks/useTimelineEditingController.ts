@@ -180,6 +180,8 @@ export function useTimelineEditingController(input: Input) {
 		setAudioRegions: timeline.setAudioRegions,
 		selectedClipId: timeline.selectedClipId,
 		setSelectedClipId: timeline.setSelectedClipId,
+		selectedSpeedSectionId: timeline.selectedSpeedSectionId,
+		setSelectedSpeedSectionId: timeline.setSelectedSpeedSectionId,
 		setSelectedZoomId: timeline.setSelectedZoomId,
 		setSelectedAnnotationId: timeline.setSelectedAnnotationId,
 		setSelectedAudioId: timeline.setSelectedAudioId,

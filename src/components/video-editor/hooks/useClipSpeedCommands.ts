@@ -6,7 +6,9 @@ import { planClipSpeedChange } from "../clipSpeedChange";
 import {
 	findSpeedSectionRoll,
 	planSpeedSectionInsert,
+	planSpeedSectionRemove,
 	planSpeedSectionRoll,
+	planSpeedSectionSlide,
 	SPEED_SECTION_DEFAULT_SOURCE_MS,
 	SPEED_SECTION_DEFAULT_SPEED,
 } from "../speedSection";
@@ -27,7 +29,8 @@ interface UseClipSpeedCommandsParams {
 	setAnnotationRegions: Dispatch<SetStateAction<AnnotationRegion[]>>;
 	setAudioRegions: Dispatch<SetStateAction<AudioRegion[]>>;
 	selectedClipId: string | null;
-	selectClip: (id: string | null) => void;
+	selectedSpeedSectionId: string | null;
+	selectSpeedSection: (clipId: string | null) => void;
 	nextClipIdRef: MutableRefObject<number>;
 	t: Translator;
 }
@@ -39,7 +42,8 @@ export function useClipSpeedCommands({
 	setAnnotationRegions,
 	setAudioRegions,
 	selectedClipId,
-	selectClip,
+	selectedSpeedSectionId,
+	selectSpeedSection,
 	nextClipIdRef,
 	t,
 }: UseClipSpeedCommandsParams) {
@@ -74,14 +78,38 @@ export function useClipSpeedCommands({
 		[t],
 	);
 
-	const handleClipSpeedChange = useCallback(
-		(speed: number) => {
-			if (!selectedClipId || !Number.isFinite(speed) || speed <= 0) return;
+	const changeSpeed = useCallback(
+		(clipId: string | null, speed: number) => {
+			if (!clipId || !Number.isFinite(speed) || speed <= 0) return;
 			if (!ensurePreviewableSpeed(speed)) return;
-			const plan = planClipSpeedChange({ clipRegions, selectedClipId, speed });
+			const plan = planClipSpeedChange({ clipRegions, selectedClipId: clipId, speed });
 			if (plan) applyRipple(plan);
 		},
-		[applyRipple, clipRegions, ensurePreviewableSpeed, selectedClipId],
+		[applyRipple, clipRegions, ensurePreviewableSpeed],
+	);
+
+	const handleClipSpeedChange = useCallback(
+		(speed: number) => changeSpeed(selectedClipId, speed),
+		[changeSpeed, selectedClipId],
+	);
+
+	/** Like deleting a zoom: the footage stays, only the speed-up goes away. */
+	const handleSpeedSectionDelete = useCallback(
+		(clipId: string) => {
+			const plan = planSpeedSectionRemove(clipRegions, clipId);
+			if (plan) applyRipple(plan);
+			selectSpeedSection(null);
+		},
+		[applyRipple, clipRegions, selectSpeedSection],
+	);
+
+	const handleSpeedSectionSpeedChange = useCallback(
+		(speed: number) => {
+			if (!selectedSpeedSectionId) return;
+			if (speed === 1) handleSpeedSectionDelete(selectedSpeedSectionId);
+			else changeSpeed(selectedSpeedSectionId, speed);
+		},
+		[changeSpeed, handleSpeedSectionDelete, selectedSpeedSectionId],
 	);
 
 	const handleSpeedUpSection = useCallback(
@@ -110,9 +138,9 @@ export function useClipSpeedCommands({
 				return;
 			}
 			if (plan.kind === "inserted") applyRipple(plan);
-			selectClip(plan.sectionId);
+			selectSpeedSection(plan.sectionId);
 		},
-		[applyRipple, clipRegions, ensurePreviewableSpeed, nextClipIdRef, selectClip, t],
+		[applyRipple, clipRegions, ensurePreviewableSpeed, nextClipIdRef, selectSpeedSection, t],
 	);
 
 	/** Handles edge drags on speed sections; returns false for any other clip edit. */
@@ -127,5 +155,27 @@ export function useClipSpeedCommands({
 		[applyRipple, clipRegions],
 	);
 
-	return { handleClipSpeedChange, handleSpeedUpSection, handleSpeedSectionRoll };
+	/** Edge drags on the speed row roll a boundary; dragging the body slides the section. */
+	const handleSpeedSectionSpanChange = useCallback(
+		(clipId: string, span: Span) => {
+			if (handleSpeedSectionRoll(clipId, span)) return;
+			const plan = planSpeedSectionSlide(
+				clipRegions,
+				clipId,
+				span.start,
+				TIMELINE_MIN_ITEM_DURATION_MS,
+			);
+			if (plan) applyRipple(plan);
+		},
+		[applyRipple, clipRegions, handleSpeedSectionRoll],
+	);
+
+	return {
+		handleClipSpeedChange,
+		handleSpeedSectionSpeedChange,
+		handleSpeedUpSection,
+		handleSpeedSectionRoll,
+		handleSpeedSectionSpanChange,
+		handleSpeedSectionDelete,
+	};
 }

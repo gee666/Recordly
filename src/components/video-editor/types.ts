@@ -118,6 +118,7 @@ export type EditorEffectSection =
 	| "crop"
 	| "extensions"
 	| "clip"
+	| "speed"
 	| "audio"
 	| `ext:${string}`;
 

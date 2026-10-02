@@ -27,6 +27,8 @@ export function useTimelineState() {
 	const [audioRegions, setAudioRegions] = useState<AudioRegion[]>([]);
 	const [selectedAudioId, setSelectedAudioId] = useState<string | null>(null);
 	const [selectedCaptionId, setSelectedCaptionId] = useState<string | null>(null);
+	/** Id of the sped-up clip whose section is selected on the speed row. */
+	const [selectedSpeedSectionId, setSelectedSpeedSectionId] = useState<string | null>(null);
 	const [sourceAudioTrackSettingsByClip, setSourceAudioTrackSettingsByClip] = useState<
 		Record<string, SourceAudioTrackSettings>
 	>({});
@@ -66,6 +68,8 @@ export function useTimelineState() {
 		setSelectedAudioId,
 		selectedCaptionId,
 		setSelectedCaptionId,
+		selectedSpeedSectionId,
+		setSelectedSpeedSectionId,
 		sourceAudioTrackSettingsByClip,
 		setSourceAudioTrackSettingsByClip,
 		defaultSourceAudioTrackSettings,

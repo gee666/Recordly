@@ -13,16 +13,19 @@ interface UseTimelineSelectionParams {
 	selectedAnnotationId?: string | null;
 	selectedAudioId?: string | null;
 	selectedCaptionId?: string | null;
+	selectedSpeedSectionId?: string | null;
 	onZoomDelete: (id: string) => void;
 	onClipDelete?: (id: string) => void;
 	onAnnotationDelete?: (id: string) => void;
 	onAudioDelete?: (id: string) => void;
 	onCaptionDelete?: (id: string) => void;
+	onSpeedSectionDelete?: (clipId: string) => void;
 	onSelectZoom: (id: string | null) => void;
 	onSelectClip?: (id: string | null) => void;
 	onSelectAnnotation?: (id: string | null) => void;
 	onSelectAudio?: (id: string | null) => void;
 	onSelectCaption?: (id: string | null) => void;
+	onSelectSpeedSection?: (clipId: string | null) => void;
 }
 
 export function useTimelineSelection({
@@ -35,16 +38,19 @@ export function useTimelineSelection({
 	selectedAnnotationId,
 	selectedAudioId,
 	selectedCaptionId,
+	selectedSpeedSectionId,
 	onZoomDelete,
 	onClipDelete,
 	onAnnotationDelete,
 	onAudioDelete,
 	onCaptionDelete,
+	onSpeedSectionDelete,
 	onSelectZoom,
 	onSelectClip,
 	onSelectAnnotation,
 	onSelectAudio,
 	onSelectCaption,
+	onSelectSpeedSection,
 }: UseTimelineSelectionParams) {
 	const [keyframes, setKeyframes] = useState<{ id: string; time: number }[]>([]);
 	const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
@@ -89,6 +95,7 @@ export function useTimelineSelection({
 		onSelectAnnotation?.(null);
 		onSelectAudio?.(null);
 		onSelectCaption?.(null);
+		onSelectSpeedSection?.(null);
 		setSelectAllBlocksActive(false);
 	}, [
 		selectAllBlocksActive,
@@ -100,6 +107,7 @@ export function useTimelineSelection({
 		onSelectAnnotation,
 		onSelectAudio,
 		onSelectCaption,
+		onSelectSpeedSection,
 	]);
 
 	const deleteSelectedClip = useCallback(() => {
@@ -126,14 +134,28 @@ export function useTimelineSelection({
 		onSelectCaption?.(null);
 	}, [selectedCaptionId, onCaptionDelete, onSelectCaption]);
 
+	const deleteSelectedSpeedSection = useCallback(() => {
+		if (!selectedSpeedSectionId || !onSpeedSectionDelete) return;
+		onSpeedSectionDelete(selectedSpeedSectionId);
+		onSelectSpeedSection?.(null);
+	}, [selectedSpeedSectionId, onSpeedSectionDelete, onSelectSpeedSection]);
+
 	const clearSelectedBlocks = useCallback(() => {
 		onSelectZoom(null);
 		onSelectClip?.(null);
 		onSelectAnnotation?.(null);
 		onSelectAudio?.(null);
 		onSelectCaption?.(null);
+		onSelectSpeedSection?.(null);
 		setSelectAllBlocksActive(false);
-	}, [onSelectZoom, onSelectClip, onSelectAnnotation, onSelectAudio, onSelectCaption]);
+	}, [
+		onSelectZoom,
+		onSelectClip,
+		onSelectAnnotation,
+		onSelectAudio,
+		onSelectCaption,
+		onSelectSpeedSection,
+	]);
 
 	const activateSelectAllZooms = useCallback(() => {
 		onSelectZoom(null);
@@ -141,48 +163,69 @@ export function useTimelineSelection({
 		onSelectAnnotation?.(null);
 		onSelectAudio?.(null);
 		onSelectCaption?.(null);
+		onSelectSpeedSection?.(null);
 		setSelectedKeyframeId(null);
 		setSelectAllBlocksActive(true);
-	}, [onSelectZoom, onSelectClip, onSelectAnnotation, onSelectAudio, onSelectCaption]);
+	}, [
+		onSelectZoom,
+		onSelectClip,
+		onSelectAnnotation,
+		onSelectAudio,
+		onSelectCaption,
+		onSelectSpeedSection,
+	]);
 
 	const handleSelectZoom = useCallback(
 		(id: string | null) => {
 			setSelectAllBlocksActive(false);
+			if (id) onSelectSpeedSection?.(null);
 			onSelectZoom(id);
 		},
-		[onSelectZoom],
+		[onSelectZoom, onSelectSpeedSection],
 	);
 
 	const handleSelectClip = useCallback(
 		(id: string | null) => {
 			setSelectAllBlocksActive(false);
+			if (id) onSelectSpeedSection?.(null);
 			onSelectClip?.(id);
 		},
-		[onSelectClip],
+		[onSelectClip, onSelectSpeedSection],
 	);
 
 	const handleSelectAnnotation = useCallback(
 		(id: string | null) => {
 			setSelectAllBlocksActive(false);
+			if (id) onSelectSpeedSection?.(null);
 			onSelectAnnotation?.(id);
 		},
-		[onSelectAnnotation],
+		[onSelectAnnotation, onSelectSpeedSection],
 	);
 
 	const handleSelectAudio = useCallback(
 		(id: string | null) => {
 			setSelectAllBlocksActive(false);
+			if (id) onSelectSpeedSection?.(null);
 			onSelectAudio?.(id);
 		},
-		[onSelectAudio],
+		[onSelectAudio, onSelectSpeedSection],
 	);
 
 	const handleSelectCaption = useCallback(
 		(id: string | null) => {
 			setSelectAllBlocksActive(false);
+			if (id) onSelectSpeedSection?.(null);
 			onSelectCaption?.(id);
 		},
-		[onSelectCaption],
+		[onSelectCaption, onSelectSpeedSection],
+	);
+
+	const handleSelectSpeedSection = useCallback(
+		(clipId: string | null) => {
+			setSelectAllBlocksActive(false);
+			onSelectSpeedSection?.(clipId);
+		},
+		[onSelectSpeedSection],
 	);
 
 	const cycleAnnotationsAtCurrentTime = useCallback(
@@ -225,12 +268,14 @@ export function useTimelineSelection({
 		deleteSelectedAnnotation,
 		deleteSelectedAudio,
 		deleteSelectedCaption,
+		deleteSelectedSpeedSection,
 		clearSelectedBlocks,
 		handleSelectZoom,
 		handleSelectClip,
 		handleSelectAnnotation,
 		handleSelectAudio,
 		handleSelectCaption,
+		handleSelectSpeedSection,
 		cycleAnnotationsAtCurrentTime,
 	};
 }

@@ -1,4 +1,5 @@
 import { formatClipSpeedLabel } from "../../clipSpeedChange";
+import { isSpeedSection } from "../../speedSection";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -7,12 +8,13 @@ import type {
 	ZoomRegion,
 } from "../../types";
 import { getClipSourceEndMs, getClipSourceStartMs } from "../../types";
-import { CAPTION_ROW_ID, CLIP_ROW_ID, ZOOM_ROW_ID } from "../core/constants";
+import { CAPTION_ROW_ID, CLIP_ROW_ID, SPEED_ROW_ID, ZOOM_ROW_ID } from "../core/constants";
 import {
 	getAnnotationTrackIndex,
 	getAnnotationTrackRowId,
 	getAudioTrackIndex,
 	getAudioTrackRowId,
+	getSpeedSectionItemId,
 	isAnnotationTrackRowId,
 	isAudioTrackRowId,
 } from "../core/rows";
@@ -79,6 +81,17 @@ export function buildTimelineItems(params: {
 		};
 	});
 
+	const speedSections: TimelineRenderItem[] = clipRegions
+		.filter(isSpeedSection)
+		.map((region) => ({
+			id: getSpeedSectionItemId(region.id),
+			rowId: SPEED_ROW_ID,
+			span: { start: region.startMs, end: region.endMs },
+			label: `${region.speed}×`,
+			speedValue: region.speed,
+			variant: "speed",
+		}));
+
 	const annotations: TimelineRenderItem[] = annotationRegions.map((region) => ({
 		id: region.id,
 		rowId: getAnnotationTrackRowId(region.trackIndex ?? 0),
@@ -106,7 +119,7 @@ export function buildTimelineItems(params: {
 		variant: "caption",
 	}));
 
-	return [...zooms, ...clips, ...annotations, ...audios, ...captions];
+	return [...zooms, ...clips, ...speedSections, ...annotations, ...audios, ...captions];
 }
 
 export function buildAllRegionSpans(params: {
@@ -127,13 +140,19 @@ export function buildAllRegionSpans(params: {
 		end: r.endMs,
 		rowId: CLIP_ROW_ID,
 	}));
+	const speedSections = clipRegions.filter(isSpeedSection).map((r) => ({
+		id: getSpeedSectionItemId(r.id),
+		start: r.startMs,
+		end: r.endMs,
+		rowId: SPEED_ROW_ID,
+	}));
 	const audios = audioRegions.map((r) => ({
 		id: r.id,
 		start: r.startMs,
 		end: r.endMs,
 		rowId: getAudioTrackRowId(r.trackIndex ?? 0),
 	}));
-	return [...zooms, ...clips, ...audios];
+	return [...zooms, ...clips, ...speedSections, ...audios];
 }
 
 export function resolveDropRowId(

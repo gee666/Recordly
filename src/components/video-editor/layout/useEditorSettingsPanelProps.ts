@@ -72,6 +72,9 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 	const selectedClip = timeline.clipRegions.find(
 		(region) => region.id === timeline.selectedClipId,
 	);
+	const selectedSpeedSection = timeline.clipRegions.find(
+		(region) => region.id === timeline.selectedSpeedSectionId,
+	);
 	const selectedAudio = timeline.audioRegions.find(
 		(region) => region.id === timeline.selectedAudioId,
 	);
@@ -98,6 +101,10 @@ export function useEditorSettingsPanelProps(input: Input): ComponentProps<typeof
 		onClipSpeedChange: clipCommands.handleClipSpeedChange,
 		onClipMutedChange: clipCommands.handleClipMutedChange,
 		onClipDelete: clipCommands.handleClipDelete,
+		selectedSpeedSectionId: selectedSpeedSection ? selectedSpeedSection.id : null,
+		selectedSpeedSectionSpeed: selectedSpeedSection?.speed ?? null,
+		onSpeedSectionSpeedChange: clipCommands.handleSpeedSectionSpeedChange,
+		onSpeedSectionDelete: clipCommands.handleSpeedSectionDelete,
 		selectedAudioId: timeline.selectedAudioId,
 		selectedAudioVolume: selectedAudio?.volume ?? null,
 		selectedAudioNormalize:

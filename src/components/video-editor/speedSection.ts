@@ -99,6 +99,14 @@ function readsOnFrom(earlier: ClipRegion, later: ClipRegion) {
 	);
 }
 
+function findPreceding(clipRegions: ClipRegion[], clip: ClipRegion) {
+	return clipRegions.find((other) => other.id !== clip.id && readsOnFrom(other, clip)) ?? null;
+}
+
+function findFollowing(clipRegions: ClipRegion[], clip: ClipRegion) {
+	return clipRegions.find((other) => other.id !== clip.id && readsOnFrom(clip, other)) ?? null;
+}
+
 /**
  * Dragging one edge of a speed section moves its boundary with the footage
  * next to it, so the section grows or shrinks over the recording instead of
@@ -119,10 +127,10 @@ export function findSpeedSectionRoll(
 	if (startMoved === endMoved) return null;
 
 	if (endMoved) {
-		const following = clipRegions.find((clip) => clip.id !== id && readsOnFrom(section, clip));
+		const following = findFollowing(clipRegions, section);
 		return following ? { first: section, second: following, boundaryMs: endMs } : null;
 	}
-	const preceding = clipRegions.find((clip) => clip.id !== id && readsOnFrom(clip, section));
+	const preceding = findPreceding(clipRegions, section);
 	return preceding ? { first: preceding, second: section, boundaryMs: startMs } : null;
 }
 
@@ -158,5 +166,98 @@ export function planSpeedSectionRoll(
 	return rippleClipChainEdit(clipRegions, {
 		previous: [first, second],
 		next: [nextFirst, nextSecond],
+	});
+}
+
+/**
+ * Moving a whole section slides it along the recording: it keeps the amount
+ * of footage it covers, and the clips on either side give and take the rest.
+ */
+export function planSpeedSectionSlide(
+	clipRegions: ClipRegion[],
+	sectionId: string,
+	startMs: number,
+	minDurationMs: number,
+): RippledClips | null {
+	const section = clipRegions.find((clip) => clip.id === sectionId);
+	if (!section || !isSpeedSection(section)) return null;
+	const preceding = findPreceding(clipRegions, section);
+	const following = findFollowing(clipRegions, section);
+	if (!preceding || !following) return null;
+
+	const precedingSpeed = safeSpeed(preceding);
+	const followingSpeed = safeSpeed(following);
+	const precedingSourceStart = getClipSourceStartMs(preceding);
+	const followingSourceEnd = getClipSourceEndMs(following);
+	const sectionSourceMs = getClipSourceEndMs(section) - getClipSourceStartMs(section);
+	const minSource = precedingSourceStart + minDurationMs * precedingSpeed;
+	const maxSource = followingSourceEnd - sectionSourceMs - minDurationMs * followingSpeed;
+	if (minSource > maxSource) return null;
+
+	const sectionSource = Math.min(
+		maxSource,
+		Math.max(minSource, precedingSourceStart + (startMs - preceding.startMs) * precedingSpeed),
+	);
+	const nextPreceding: ClipRegion = {
+		...preceding,
+		endMs: Math.round(
+			preceding.startMs + (sectionSource - precedingSourceStart) / precedingSpeed,
+		),
+	};
+	const nextSection: ClipRegion = {
+		...section,
+		startMs: nextPreceding.endMs,
+		sourceStartMs: Math.round(sectionSource),
+		endMs: nextPreceding.endMs + Math.round(sectionSourceMs / safeSpeed(section)),
+	};
+	const followingSource = sectionSource + sectionSourceMs;
+	const nextFollowing: ClipRegion = {
+		...following,
+		startMs: nextSection.endMs,
+		sourceStartMs: Math.round(followingSource),
+		endMs:
+			nextSection.endMs + Math.round((followingSourceEnd - followingSource) / followingSpeed),
+	};
+
+	return rippleClipChainEdit(clipRegions, {
+		previous: [preceding, section, following],
+		next: [nextPreceding, nextSection, nextFollowing],
+	});
+}
+
+function canRejoin(neighbour: ClipRegion | null, section: ClipRegion) {
+	return (
+		neighbour !== null &&
+		!isSpeedSection(neighbour) &&
+		Boolean(neighbour.muted) === Boolean(section.muted) &&
+		Boolean(neighbour.showSourceAudio) === Boolean(section.showSourceAudio)
+	);
+}
+
+/** Plays a section at 1x again and joins it back to the footage around it. */
+export function planSpeedSectionRemove(
+	clipRegions: ClipRegion[],
+	sectionId: string,
+): RippledClips | null {
+	const section = clipRegions.find((clip) => clip.id === sectionId);
+	if (!section || !isSpeedSection(section)) return null;
+	const preceding = findPreceding(clipRegions, section);
+	const following = findFollowing(clipRegions, section);
+	const head = canRejoin(preceding, section) ? preceding : null;
+	const tail = canRejoin(following, section) ? following : null;
+
+	const base = head ?? section;
+	const sourceStartMs = getClipSourceStartMs(base);
+	const sourceEndMs = getClipSourceEndMs(tail ?? section);
+	const rejoined: ClipRegion = {
+		...base,
+		speed: 1,
+		sourceStartMs,
+		endMs: base.startMs + (sourceEndMs - sourceStartMs),
+	};
+
+	return rippleClipChainEdit(clipRegions, {
+		previous: [head, section, tail].filter((clip): clip is ClipRegion => clip !== null),
+		next: [rejoined],
 	});
 }

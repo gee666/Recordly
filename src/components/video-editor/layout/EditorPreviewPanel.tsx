@@ -2,6 +2,7 @@ import {
 	CaretDown,
 	Check,
 	Crop,
+	FastForward,
 	MagicWand,
 	MagnifyingGlassPlus,
 	Pause,
@@ -294,6 +295,15 @@ export function EditorPreviewPanel(props: Props) {
 						title={t("editor.toolbar.splitClip")}
 					>
 						<Scissors className="h-4 w-4" />
+					</Button>
+					<Button
+						onClick={() => timelineRef.current?.speedUpSection()}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-[#f59e0b]/10 hover:text-[#f59e0b]"
+						title={t("editor.toolbar.speedUpSection")}
+					>
+						<FastForward className="h-4 w-4" />
 					</Button>
 				</div>
 

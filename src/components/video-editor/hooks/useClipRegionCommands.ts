@@ -1,11 +1,15 @@
 import type { Span } from "dnd-timeline";
 import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from "react";
-import { toast } from "sonner";
 import { changeClipSpan } from "../clipSpanChange";
-import { planClipSpeedChange } from "../clipSpeedChange";
 import { planClipSplit } from "../clipSplit";
-import type { ClipRegion, EditorEffectSection, ZoomRegion } from "../types";
-import { supportsPreviewPlaybackRate } from "../videoPlayback/playbackRate";
+import type {
+	AnnotationRegion,
+	AudioRegion,
+	ClipRegion,
+	EditorEffectSection,
+	ZoomRegion,
+} from "../types";
+import { useClipSpeedCommands } from "./useClipSpeedCommands";
 
 type Translator = (
 	key: string,
@@ -17,8 +21,9 @@ interface UseClipRegionCommandsParams {
 	sourceDurationMs: number;
 	clipRegions: ClipRegion[];
 	setClipRegions: Dispatch<SetStateAction<ClipRegion[]>>;
-	zoomRegions: ZoomRegion[];
 	setZoomRegions: Dispatch<SetStateAction<ZoomRegion[]>>;
+	setAnnotationRegions: Dispatch<SetStateAction<AnnotationRegion[]>>;
+	setAudioRegions: Dispatch<SetStateAction<AudioRegion[]>>;
 	selectedClipId: string | null;
 	setSelectedClipId: Dispatch<SetStateAction<string | null>>;
 	setSelectedZoomId: Dispatch<SetStateAction<string | null>>;
@@ -34,8 +39,9 @@ export function useClipRegionCommands({
 	sourceDurationMs,
 	clipRegions,
 	setClipRegions,
-	zoomRegions,
 	setZoomRegions,
+	setAnnotationRegions,
+	setAudioRegions,
 	selectedClipId,
 	setSelectedClipId,
 	setSelectedZoomId,
@@ -69,6 +75,19 @@ export function useClipRegionCommands({
 		],
 	);
 
+	const { handleClipSpeedChange, handleSpeedUpSection, handleSpeedSectionRoll } =
+		useClipSpeedCommands({
+			clipRegions,
+			setClipRegions,
+			setZoomRegions,
+			setAnnotationRegions,
+			setAudioRegions,
+			selectedClipId,
+			selectClip: handleSelectClip,
+			nextClipIdRef,
+			t,
+		});
+
 	const handleClipSplit = useCallback(
 		(splitMs: number) => {
 			const plan = planClipSplit({
@@ -89,6 +108,7 @@ export function useClipRegionCommands({
 
 	const handleClipSpanChange = useCallback(
 		(id: string, span: Span) => {
+			if (handleSpeedSectionRoll(id, span)) return;
 			const oldClip = clipRegions.find((clip) => clip.id === id);
 			const newStart = Math.round(span.start);
 			const newEnd = Math.round(span.end);
@@ -118,41 +138,7 @@ export function useClipRegionCommands({
 				}),
 			);
 		},
-		[clipRegions, setClipRegions, setZoomRegions, sourceDurationMs],
-	);
-
-	const handleClipSpeedChange = useCallback(
-		(speed: number) => {
-			if (!selectedClipId || !Number.isFinite(speed) || speed <= 0) return;
-			if (!supportsPreviewPlaybackRate(speed)) {
-				toast.error(
-					t(
-						"editor.timeline.unsupportedSpeed",
-						"This speed is not supported for preview on this device.",
-					),
-				);
-				return;
-			}
-			const plan = planClipSpeedChange({ clipRegions, zoomRegions, selectedClipId, speed });
-			if (!plan) return;
-			if ("blockedReason" in plan) {
-				toast.warning(
-					plan.blockedReason === "clip-overlap"
-						? t(
-								"editor.timeline.speedClipOverlap",
-								"Speed change would overlap the next clip. Move or split clips before slowing this section.",
-							)
-						: t(
-								"editor.timeline.speedZoomOverlap",
-								"Speed change would overlap another zoom. Move or delete the overlapping zoom first.",
-							),
-				);
-				return;
-			}
-			setClipRegions(plan.clipRegions);
-			setZoomRegions(plan.zoomRegions);
-		},
-		[clipRegions, selectedClipId, setClipRegions, setZoomRegions, t, zoomRegions],
+		[clipRegions, handleSpeedSectionRoll, setClipRegions, setZoomRegions, sourceDurationMs],
 	);
 
 	const handleClipMutedChange = useCallback(
@@ -190,6 +176,7 @@ export function useClipRegionCommands({
 		handleClipSplit,
 		handleClipSpanChange,
 		handleClipSpeedChange,
+		handleSpeedUpSection,
 		handleClipMutedChange,
 		handleClipShowSourceAudioChange,
 		handleClipDelete,

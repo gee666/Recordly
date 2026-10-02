@@ -46,9 +46,11 @@ export function calculateAxisScale(visibleRangeMs: number): {
 	};
 }
 
+export const TIMELINE_MIN_ITEM_DURATION_MS = 100;
+
 export function calculateTimelineScale(durationSeconds: number): TimelineScaleConfig {
 	const totalMs = Math.max(0, Math.round(durationSeconds * 1000));
-	const minItemDurationMs = 100;
+	const minItemDurationMs = TIMELINE_MIN_ITEM_DURATION_MS;
 
 	const defaultItemDurationMs =
 		totalMs > 0

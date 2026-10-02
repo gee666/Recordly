@@ -1,5 +1,6 @@
 import type { Span } from "dnd-timeline";
 import { useCallback, useMemo } from "react";
+import { findSpeedSectionRoll } from "../../speedSection";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -140,6 +141,11 @@ export function useTimelineDndBindings({
 		],
 	);
 
+	const resizesIntoNeighbour = useCallback(
+		(id: string, span: Span) => findSpeedSectionRoll(clipRegions, id, span) !== null,
+		[clipRegions],
+	);
+
 	const timelineItems = useMemo<TimelineRenderItem[]>(
 		() =>
 			buildTimelineItems({
@@ -203,6 +209,7 @@ export function useTimelineDndBindings({
 
 	return {
 		hasOverlap,
+		resizesIntoNeighbour,
 		timelineItems,
 		allRegionSpans,
 		getResolvedDropRowId,

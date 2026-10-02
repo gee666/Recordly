@@ -129,6 +129,18 @@ export function useAudioRegionCommands({
 		[selectedAudioId, setAudioRegions],
 	);
 
+	const handleAudioDetachedChange = useCallback(
+		(detachedFromVideo: boolean) => {
+			if (!selectedAudioId) return;
+			setAudioRegions((current) =>
+				current.map((region) =>
+					region.id === selectedAudioId ? { ...region, detachedFromVideo } : region,
+				),
+			);
+		},
+		[selectedAudioId, setAudioRegions],
+	);
+
 	return {
 		handleSelectAudio,
 		handleAudioAdded,
@@ -136,5 +148,6 @@ export function useAudioRegionCommands({
 		handleAudioVolumeChange,
 		handleAudioDelete,
 		handleAudioNormalizeChange,
+		handleAudioDetachedChange,
 	};
 }

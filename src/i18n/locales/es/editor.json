@@ -143,11 +143,14 @@
 	},
 	"toolbar": {
 		"addLayer": "Agregar capa",
-		"splitClip": "Dividir clip (C)"
+		"splitClip": "Dividir clip (C)",
+		"speedUpSection": "Acelerar sección (S)"
 	},
 	"timeline": {
 		"expand": "Expandir línea de tiempo",
-		"collapse": "Contraer línea de tiempo"
+		"collapse": "Contraer línea de tiempo",
+		"speedUpNoClip": "Coloca el cabezal sobre el vídeo para acelerar una sección.",
+		"speedUpTooShort": "No queda suficiente metraje en este clip para acelerarlo."
 	},
 	"openRecordingsFolder": "Abrir carpeta de grabaciones"
 }

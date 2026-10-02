@@ -247,6 +247,7 @@
 		"volumeTitle": "Áudio",
 		"volume": "Volume",
 		"normalize": "Normalizar",
+		"followVideo": "Acompanhar mudanças de velocidade do vídeo",
 		"sourceTracksTitle": "Áudio original do clipe",
 		"systemLabel": "Sistema",
 		"micLabel": "Microfone",

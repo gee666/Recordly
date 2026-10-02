@@ -151,6 +151,21 @@ describe("timeline dnd engine", () => {
 		expect(result).toEqual({ start: 900, end: 1500 });
 	});
 
+	it("lets a resize that rolls into its neighbour pass the overlap clamp", () => {
+		const result = resolveResizeEnd(
+			"a",
+			{ start: 0, end: 2200 },
+			{
+				totalMs: 5000,
+				minItemDurationMs: 100,
+				allRegionSpans: BASE_SPANS,
+				hasOverlap: () => true,
+				resizesIntoNeighbour: (id) => id === "a",
+			},
+		);
+		expect(result).toEqual({ start: 0, end: 2200 });
+	});
+
 	it("returns null when resize still overlaps after neighbour clamp", () => {
 		const result = resolveResizeEnd(
 			"a",

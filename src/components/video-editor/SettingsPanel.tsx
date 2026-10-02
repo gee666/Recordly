@@ -36,6 +36,7 @@ import { SUPPORTED_LOCALES } from "../../i18n/config";
 import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import CaptionListPanel from "./CaptionListPanel";
 import type { CaptionRetimeSpan } from "./captionOps";
+import { ClipSpeedPresets } from "./ClipSpeedPresets";
 import {
 	CURSOR_MOTION_PRESETS,
 	type CursorMotionPresetId,
@@ -531,8 +532,10 @@ interface SettingsPanelProps {
 	selectedAudioId?: string | null;
 	selectedAudioVolume?: number | null;
 	selectedAudioNormalize?: boolean | null;
+	selectedAudioDetached?: boolean | null;
 	onAudioVolumeChange?: (volume: number) => void;
 	onAudioNormalizeChange?: (normalize: boolean) => void;
+	onAudioDetachedChange?: (detached: boolean) => void;
 	onAudioDelete?: (id: string) => void;
 	shadowIntensity?: number;
 	onShadowChange?: (intensity: number) => void;
@@ -986,8 +989,10 @@ export function SettingsPanel({
 	selectedAudioId,
 	selectedAudioVolume,
 	selectedAudioNormalize,
+	selectedAudioDetached,
 	onAudioVolumeChange,
 	onAudioNormalizeChange,
+	onAudioDetachedChange,
 	onAudioDelete,
 	shadowIntensity = 0.67,
 	onShadowChange,
@@ -3007,6 +3012,17 @@ export function SettingsPanel({
 						className="data-[state=checked]:bg-[#2563EB] scale-75"
 					/>
 				</div>
+				<div className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-2.5 py-1.5">
+					<span className="text-[10px] text-muted-foreground">
+						{tSettings("audio.followVideo", "Follow video speed changes")}
+					</span>
+					<Switch
+						checked={!selectedAudioDetached}
+						onCheckedChange={(follow) => onAudioDetachedChange?.(!follow)}
+						aria-label={tSettings("audio.followVideo", "Follow video speed changes")}
+						className="data-[state=checked]:bg-[#2563EB] scale-75"
+					/>
+				</div>
 			</section>
 		);
 
@@ -3023,6 +3039,11 @@ export function SettingsPanel({
 					onChange={(value) => onClipSpeedChange?.(value)}
 					formatValue={(value) => `${value}×`}
 					parseInput={(text) => Number.parseFloat(text)}
+				/>
+				<ClipSpeedPresets
+					speed={selectedClipSpeed ?? null}
+					range={clipSpeedRange}
+					onSelect={(speed) => onClipSpeedChange?.(speed)}
 				/>
 				{selectedClipSpeed != null &&
 					(selectedClipSpeed < clipSpeedRange.min || selectedClipSpeed > clipSpeedRange.max) && (

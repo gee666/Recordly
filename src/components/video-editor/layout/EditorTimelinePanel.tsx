@@ -81,6 +81,7 @@ export function EditorTimelinePanel(props: Props) {
 				trimRegions={timeline.trimRegions}
 				clipRegions={timeline.clipRegions}
 				onClipSplit={clipCommands.handleClipSplit}
+				onSpeedUpSection={clipCommands.handleSpeedUpSection}
 				onClipSpanChange={clipCommands.handleClipSpanChange}
 				selectedClipId={timeline.selectedClipId}
 				onSelectClip={clipCommands.handleSelectClip}

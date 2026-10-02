@@ -8,6 +8,8 @@ export interface DndEngineConfig {
 	minVisibleRangeMs: number;
 	allRegionSpans: TimelineRegionSpan[];
 	hasOverlap: (newSpan: Span, excludeId?: string, rowId?: string) => boolean;
+	/** Resizes that move a shared boundary into the neighbour instead of stopping at it. */
+	resizesIntoNeighbour?: (id: string, span: Span) => boolean;
 }
 
 export function clampSpanToBounds(
@@ -270,15 +272,19 @@ export function resolveResizeEnd(
 	updatedSpan: Span,
 	config: Pick<
 		DndEngineConfig,
-		"totalMs" | "minItemDurationMs" | "allRegionSpans" | "hasOverlap"
+		"totalMs" | "minItemDurationMs" | "allRegionSpans" | "hasOverlap" | "resizesIntoNeighbour"
 	>,
 ): Span | null {
-	const { totalMs, minItemDurationMs, allRegionSpans, hasOverlap } = config;
+	const { totalMs, minItemDurationMs, allRegionSpans, hasOverlap, resizesIntoNeighbour } = config;
 	let clamped = clampSpanToBounds(updatedSpan, { totalMs, minItemDurationMs });
 	const effectiveMinDuration =
 		totalMs > 0 ? Math.min(minItemDurationMs, totalMs) : minItemDurationMs;
 	if (clamped.end - clamped.start < effectiveMinDuration) {
 		return null;
+	}
+
+	if (resizesIntoNeighbour?.(activeItemId, clamped)) {
+		return clamped;
 	}
 
 	if (hasOverlap(clamped, activeItemId)) {

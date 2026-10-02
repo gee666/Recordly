@@ -18,6 +18,7 @@ interface TimelineWrapperProps {
 	range: Range;
 	videoDuration: number;
 	hasOverlap: (newSpan: Span, excludeId?: string, rowId?: string) => boolean;
+	resizesIntoNeighbour?: (id: string, span: Span) => boolean;
 	onRangeChange: Dispatch<SetStateAction<Range>>;
 	minItemDurationMs: number;
 	minVisibleRangeMs: number;
@@ -34,6 +35,7 @@ export default function TimelineWrapper({
 	range,
 	videoDuration,
 	hasOverlap,
+	resizesIntoNeighbour,
 	onRangeChange,
 	minItemDurationMs,
 	minVisibleRangeMs,
@@ -57,11 +59,19 @@ export default function TimelineWrapper({
 				minItemDurationMs,
 				allRegionSpans,
 				hasOverlap,
+				resizesIntoNeighbour,
 			});
 			if (!resolvedSpan) return;
 			onItemSpanChange(activeItemId, resolvedSpan);
 		},
-		[allRegionSpans, hasOverlap, minItemDurationMs, onItemSpanChange, totalMs],
+		[
+			allRegionSpans,
+			hasOverlap,
+			minItemDurationMs,
+			onItemSpanChange,
+			resizesIntoNeighbour,
+			totalMs,
+		],
 	);
 
 	const onDragEnd = useCallback(

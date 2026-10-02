@@ -142,11 +142,14 @@
 	},
 	"toolbar": {
 		"addLayer": "Ebene hinzufügen",
-		"splitClip": "Clip teilen (C)"
+		"splitClip": "Clip teilen (C)",
+		"speedUpSection": "Abschnitt beschleunigen (S)"
 	},
 	"timeline": {
 		"expand": "Zeitleiste erweitern",
-		"collapse": "Zeitleiste reduzieren"
+		"collapse": "Zeitleiste reduzieren",
+		"speedUpNoClip": "Bewege den Abspielkopf über das Video, um einen Abschnitt zu beschleunigen.",
+		"speedUpTooShort": "In diesem Clip ist nicht genug Material zum Beschleunigen übrig."
 	},
 	"openRecordingsFolder": "Aufnahmeordner öffnen"
 }

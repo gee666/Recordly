@@ -1,4 +1,5 @@
 import {
+	FastForward,
 	FilmSlate as Film,
 	Gauge,
 	ChatCircle as MessageSquare,
@@ -134,7 +135,9 @@ export default function Item({
 		: isTrim
 			? glassStyles.glassRed
 			: isClip
-				? glassStyles.glassCyan
+				? clipSpeedLabel
+					? glassStyles.glassAmber
+					: glassStyles.glassCyan
 				: isSpeed
 					? glassStyles.glassAmber
 					: isAudio
@@ -235,7 +238,11 @@ export default function Item({
 								</>
 							) : isClip ? (
 								<>
-									<Film className="w-3.5 h-3.5 shrink-0" />
+									{clipSpeedLabel ? (
+										<FastForward className="w-3.5 h-3.5 shrink-0" />
+									) : (
+										<Film className="w-3.5 h-3.5 shrink-0" />
+									)}
 									<span className="text-[11px] font-semibold tracking-tight whitespace-nowrap">
 										Clip
 									</span>

@@ -143,11 +143,14 @@
 	},
 	"toolbar": {
 		"addLayer": "添加图层",
-		"splitClip": "拆分片段 (C)"
+		"splitClip": "拆分片段 (C)",
+		"speedUpSection": "加速片段 (S)"
 	},
 	"timeline": {
 		"expand": "展开时间轴",
-		"collapse": "折叠时间轴"
+		"collapse": "折叠时间轴",
+		"speedUpNoClip": "请将播放头移到视频上以加速片段。",
+		"speedUpTooShort": "此片段剩余的画面不足以加速。"
 	},
 	"openRecordingsFolder": "打开录制文件夹"
 }

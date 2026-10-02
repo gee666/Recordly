@@ -51,6 +51,7 @@ export interface TimelineEditorProps {
 	onTrimSpanChange?: (id: string, span: Span) => void;
 	clipRegions?: ClipRegion[];
 	onClipSplit?: (splitMs: number) => void;
+	onSpeedUpSection?: (atMs: number) => void;
 	onClipSpanChange?: (id: string, span: Span) => void;
 	onClipDelete?: (id: string) => void;
 	selectedClipId?: string | null;
@@ -107,6 +108,7 @@ export interface TimelineEditorHandle {
 	addZoom: () => void;
 	suggestZooms: () => void;
 	splitClip: () => void;
+	speedUpSection: () => void;
 	addAnnotation: (trackIndex?: number) => void;
 	addAudio: (trackIndex?: number) => Promise<void>;
 	keyframes: { id: string; time: number }[];
@@ -134,6 +136,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			onTrimSpanChange,
 			clipRegions = [],
 			onClipSplit,
+			onSpeedUpSection,
 			onClipSpanChange,
 			onClipDelete,
 			selectedClipId,
@@ -343,6 +346,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			handleSelectAudio,
 			handleSelectCaption,
 			hasOverlap,
+			resizesIntoNeighbour,
 			timelineItems,
 			allRegionSpans,
 			getResolvedDropRowId,
@@ -373,6 +377,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			onTrimSpanChange,
 			clipRegions,
 			onClipSplit,
+			onSpeedUpSection,
 			onClipSpanChange,
 			onClipDelete,
 			selectedClipId,
@@ -444,6 +449,7 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 						range={clampedRange}
 						videoDuration={videoDuration}
 						hasOverlap={hasOverlap}
+						resizesIntoNeighbour={resizesIntoNeighbour}
 						onRangeChange={setRange}
 						minItemDurationMs={timelineScale.minItemDurationMs}
 						minVisibleRangeMs={timelineScale.minVisibleRangeMs}

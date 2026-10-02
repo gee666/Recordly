@@ -144,11 +144,14 @@
 	},
 	"toolbar": {
 		"addLayer": "Laag toevoegen",
-		"splitClip": "Clip splitsen (C)"
+		"splitClip": "Clip splitsen (C)",
+		"speedUpSection": "Sectie versnellen (S)"
 	},
 	"timeline": {
 		"expand": "Tijdlijn uitvouwen",
-		"collapse": "Tijdlijn samenvouwen"
+		"collapse": "Tijdlijn samenvouwen",
+		"speedUpNoClip": "Zet de afspeelkop op de video om een sectie te versnellen.",
+		"speedUpTooShort": "Er is niet genoeg beeldmateriaal over in deze clip om te versnellen."
 	},
 	"openRecordingsFolder": "Opnamemap openen"
 }

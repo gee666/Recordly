@@ -559,6 +559,8 @@ export interface AudioRegion {
 	volume: number;
 	normalize?: boolean;
 	trackIndex?: number;
+	/** Keeps the region where it is when speed edits retime the video around it. */
+	detachedFromVideo?: boolean;
 }
 
 export interface CaptionCue {

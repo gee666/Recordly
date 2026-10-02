@@ -143,11 +143,14 @@
 	},
 	"toolbar": {
 		"addLayer": "Aggiungi livello",
-		"splitClip": "Dividi clip (C)"
+		"splitClip": "Dividi clip (C)",
+		"speedUpSection": "Accelera sezione (S)"
 	},
 	"timeline": {
 		"expand": "Espandi timeline",
-		"collapse": "Comprimi timeline"
+		"collapse": "Comprimi timeline",
+		"speedUpNoClip": "Posiziona la testina sul video per accelerare una sezione.",
+		"speedUpTooShort": "Non c'è abbastanza filmato in questa clip da accelerare."
 	},
 	"openRecordingsFolder": "Apri cartella registrazioni"
 }

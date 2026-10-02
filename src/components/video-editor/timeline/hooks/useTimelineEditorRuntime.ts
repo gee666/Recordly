@@ -43,6 +43,7 @@ interface UseTimelineEditorRuntimeParams {
 	onTrimSpanChange?: (id: string, span: Span) => void;
 	clipRegions: ClipRegion[];
 	onClipSplit?: (splitMs: number) => void;
+	onSpeedUpSection?: (atMs: number) => void;
 	onClipSpanChange?: (id: string, span: Span) => void;
 	onClipDelete?: (id: string) => void;
 	selectedClipId?: string | null;
@@ -93,6 +94,7 @@ export function useTimelineEditorRuntime({
 	onTrimSpanChange,
 	clipRegions,
 	onClipSplit,
+	onSpeedUpSection,
 	onClipSpanChange,
 	onClipDelete,
 	selectedClipId,
@@ -183,6 +185,7 @@ export function useTimelineEditorRuntime({
 
 	const {
 		hasOverlap,
+		resizesIntoNeighbour,
 		timelineItems,
 		allRegionSpans,
 		getResolvedDropRowId,
@@ -235,6 +238,13 @@ export function useTimelineEditorRuntime({
 		onClipSplit(currentTimeMs);
 	}, [videoDuration, totalMs, currentTimeMs, onClipSplit]);
 
+	const handleSpeedUpSection = useCallback(() => {
+		if (!videoDuration || totalMs === 0 || !onSpeedUpSection) {
+			return;
+		}
+		onSpeedUpSection(currentTimeMs);
+	}, [videoDuration, totalMs, currentTimeMs, onSpeedUpSection]);
+
 	const { handleAddAudio } = useTimelineAudioActions({
 		timeline: { videoDuration, totalMs, currentTimeMs },
 		regions: { audio: audioRegions },
@@ -277,6 +287,7 @@ export function useTimelineEditorRuntime({
 		addKeyframe,
 		handleAddZoom,
 		handleSplitClip,
+		handleSpeedUpSection,
 		handleAddAnnotation: () => handleAddAnnotation(),
 		deleteSelectedKeyframe,
 		deleteSelectedZoom,
@@ -293,6 +304,7 @@ export function useTimelineEditorRuntime({
 			addZoom: handleAddZoom,
 			suggestZooms: handleSuggestZooms,
 			splitClip: handleSplitClip,
+			speedUpSection: handleSpeedUpSection,
 			addAnnotation: handleAddAnnotation,
 			addAudio: handleAddAudio,
 			keyframes,
@@ -303,6 +315,7 @@ export function useTimelineEditorRuntime({
 			handleAddZoom,
 			handleSuggestZooms,
 			handleSplitClip,
+			handleSpeedUpSection,
 			keyframes,
 		],
 	);
@@ -321,6 +334,7 @@ export function useTimelineEditorRuntime({
 		handleSelectAudio,
 		handleSelectCaption,
 		hasOverlap,
+		resizesIntoNeighbour,
 		timelineItems,
 		allRegionSpans,
 		getResolvedDropRowId,

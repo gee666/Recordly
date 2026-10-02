@@ -144,11 +144,14 @@
 	},
 	"toolbar": {
 		"addLayer": "레이어 추가",
-		"splitClip": "클립 분할 (C)"
+		"splitClip": "클립 분할 (C)",
+		"speedUpSection": "구간 빠르게 (S)"
 	},
 	"timeline": {
 		"expand": "타임라인 펼치기",
-		"collapse": "타임라인 접기"
+		"collapse": "타임라인 접기",
+		"speedUpNoClip": "구간을 빠르게 하려면 재생 헤드를 영상 위로 옮기세요.",
+		"speedUpTooShort": "이 클립에는 빠르게 할 영상이 충분하지 않습니다."
 	},
 	"openRecordingsFolder": "녹화 폴더 열기"
 }
